@@ -8,8 +8,8 @@ FEATURE_PACKAGES_qemu-virtio = "\
     kernel-module-sel4-virt \
     kernel-module-sel4-tracebuffer \
     qemu \
-    qemu-sel4-helpers \
-    qemu-sel4-helpers-gui \
+    qemu-rnd-helper \
+    qemu-rnd-helper-gui \
     screen \
     kernel-module-vhost \
     kernel-module-vhost-net \

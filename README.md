@@ -1,3 +1,3 @@
-# meta-sel4
+# meta-virt
 
-This is a Yocto layer containing examples of user and driver VM images.
+Playground for virtualization R&D.
