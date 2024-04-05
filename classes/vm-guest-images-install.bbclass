@@ -13,7 +13,7 @@ VM_GUEST_IMAGES[type] = "list"
 # <image>.<VM_GUEST_IMAGE_INSTALL_EXT>
 # The default image install dir is defined by VM_GUEST_IMAGE_INSTALL_DIR
 # variable. Using the defaults for `foo-image` would install the foo-image
-# wic.qcow2 image to:
+# ext4.qcow2 image to:
 # /var/lib/virt/images/foo-image.qcow2
 #
 # The individual image filename and installation path can be customized using
@@ -37,7 +37,7 @@ VM_GUEST_IMAGES_INSTALL_DIR ??= "${localstatedir}/lib/virt/images"
 VM_GUEST_IMAGES_INSTALL_EXT ??= "qcow2"
 
 # The variable is used to locate the image file(s) from deploy dir
-VM_GUEST_IMAGES_FSTYPES ??= "wic.qcow2"
+VM_GUEST_IMAGES_FSTYPES ??= "ext4.qcow2"
 
 # Helpers
 def guest_override_variables_str(d):
