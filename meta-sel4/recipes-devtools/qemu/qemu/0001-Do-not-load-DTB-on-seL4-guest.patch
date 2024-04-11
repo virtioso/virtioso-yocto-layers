@@ -1,4 +1,4 @@
-From 54ead56002d1106b66797d0600f7b973f0c467a0 Mon Sep 17 00:00:00 2001
+From f75db96950750df4f71815639d4c98fc7e0b41e6 Mon Sep 17 00:00:00 2001
 From: Hannu Lyytinen <hannux@ssrc.tii.ae>
 Date: Tue, 28 Feb 2023 01:38:38 +0200
 Subject: [PATCH] Do not load DTB on seL4 guest
@@ -8,27 +8,27 @@ Content-Transfer-Encoding: 8bit
 
 This would break SWIOTLB boot.
 
+Upstream-Status: Inappropriate [sel4 specific]
+
 Signed-off-by: Hannu Lyytinen <hannux@ssrc.tii.ae>
 Signed-off-by: Markku Ahvenjärvi <markku.ahvenjarvi@unikie.com>
-
-
 ---
  hw/arm/boot.c | 5 +++++
  1 file changed, 5 insertions(+)
 
 diff --git a/hw/arm/boot.c b/hw/arm/boot.c
-index ada2717f76..f30d033c9f 100644
+index 84ea6a807a..aa9a25f5b0 100644
 --- a/hw/arm/boot.c
 +++ b/hw/arm/boot.c
-@@ -15,6 +15,7 @@
- #include "hw/arm/boot.h"
+@@ -16,6 +16,7 @@
  #include "hw/arm/linux-boot-if.h"
  #include "sysemu/kvm.h"
+ #include "sysemu/tcg.h"
 +#include "sysemu/sel4.h"
  #include "sysemu/sysemu.h"
  #include "sysemu/numa.h"
  #include "hw/boards.h"
-@@ -540,6 +541,10 @@ int arm_load_dtb(hwaddr addr, const struct arm_boot_info *binfo,
+@@ -522,6 +523,10 @@ int arm_load_dtb(hwaddr addr, const struct arm_boot_info *binfo,
      char **node_path;
      Error *err = NULL;
  

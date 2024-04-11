@@ -16,3 +16,10 @@ MODULE_NAME = "sel4_virt"
 
 KERNEL_MODULE_AUTOLOAD += "${MODULE_NAME}"
 
+# Workaround for do_rootfs spdx generation error:
+# If the module recipe name is prefixed with 'kernel-module-", the spdx
+# generation fails as kernel-module-split.bbclass attempts to create virtual
+# package for the actual package i.e.
+# 'kernel-module-<name>-<kernel-version>' -> 'kernel-module-<name> but this
+# already exists and there is a separate spdx.json.
+KERNEL_MODULE_PROVIDE_VIRTUAL = "0"

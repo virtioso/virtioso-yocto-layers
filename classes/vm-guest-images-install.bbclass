@@ -78,7 +78,7 @@ def image_deploy_path(image, d):
     machine = d.getVar('MACHINE', True)
     fstypes = d.getVar('VM_GUEST_IMAGES_FSTYPES', True)
 
-    return os.path.join(deploy_dir, f"{image}-{machine}.{fstypes}")
+    return os.path.join(deploy_dir, f"{image}-{machine}.rootfs.{fstypes}")
 
 python install_vm_images() {
     import shutil
