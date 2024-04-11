@@ -7,14 +7,6 @@ inherit image-hostname vm-image-features vm-guest-images-install
 
 SUMMARY = "Driver VM"
 
-DEPENDS:append:raspberrypi4 = " \
-    bootscripts \
-    "
-
-IMAGE_FSTYPES:append:raspberrypi4 = " \
-    rpi-sdimg \
-    "
-
 IMAGE_INSTALL:append = " \
     ${@bb.utils.contains("MACHINE_FEATURES", "pci", "pciutils", "", d)} \
     ${@bb.utils.contains("MACHINE_FEATURES", "usbhost", "usbutils", "", d)} \
