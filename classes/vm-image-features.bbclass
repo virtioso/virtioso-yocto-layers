@@ -4,13 +4,10 @@
 
 inherit core-image
 
-FEATURE_PACKAGES_qemu-virtio = "\
-    kernel-module-sel4-virt \
-    kernel-module-sel4-tracebuffer \
+FEATURE_PACKAGES_qemu-virtualization = "\
     qemu \
     qemu-rnd-helper \
     qemu-rnd-helper-gui \
-    screen \
     kernel-module-vhost \
     kernel-module-vhost-net \
     kernel-module-tap \

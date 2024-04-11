@@ -13,14 +13,8 @@ IMAGE_INSTALL:append = " \
     "
 
 IMAGE_FEATURES += " \
-    qemu-virtio \
+    qemu-virtualization \
     benchmark \
-    "
-
-IMAGE_INSTALL += " \
-    trace-cmd \
-    sel4-trace-support \
-    sel4-collect-traces \
     "
 
 export IMAGE_BASENAME = "vm-image-driver"
