@@ -20,5 +20,5 @@ MODULE_NAME = "connection"
 KERNEL_MODULE_AUTOLOAD += "${MODULE_NAME}"
 
 do_compile:prepend () {
-    cp ${WORKDIR}/Makefile ${S}
+    cp ${UNPACKDIR}/Makefile ${S}
 }

@@ -13,7 +13,7 @@ SRC_URI:append = " \
 "
 do_install:append () {
         install -d ${D}/${sysconfdir}/X11/xorg.conf.d/
-        install -m 0644 ${WORKDIR}/xorg.conf.d/99-enable_sw_cursor.conf ${D}/${sysconfdir}/X11/xorg.conf.d/
+        install -m 0644 ${UNPACKDIR}/xorg.conf.d/99-enable_sw_cursor.conf ${D}/${sysconfdir}/X11/xorg.conf.d/
 }
 
 FILES:${PN}:append = " ${sysconfdir}/X11/xorg.conf.d/*"

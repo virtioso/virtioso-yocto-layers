@@ -16,7 +16,7 @@ RDEPENDS:${PN} += " \
 "
 
 do_install:append() {
-    install -m 0755 ${WORKDIR}/init ${D}
+    install -m 0755 ${UNPACKDIR}/init ${D}
 }
 
 FILES:${PN} = "\

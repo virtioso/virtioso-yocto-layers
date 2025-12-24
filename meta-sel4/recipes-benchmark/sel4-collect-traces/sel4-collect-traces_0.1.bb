@@ -12,7 +12,7 @@ RDEPENDS:${PN} += " \
 
 do_install:append() {
     install -d ${D}${bindir}
-    install -m 0755 ${WORKDIR}/collect-traces.sh ${D}${bindir}
+    install -m 0755 ${UNPACKDIR}/collect-traces.sh ${D}${bindir}
 }
 
 FILES:${PN} = "\

@@ -16,12 +16,12 @@ SRC_URI = " \
     "
 
 do_compile() {
-    for f in ${WORKDIR}/*.cmd.in; do
+    for f in ${UNPACKDIR}/*.cmd.in; do
         base=`basename $f | sed -e 's/\.cmd\.in$//g'`
         sed -e 's/@@KERNEL_IMAGETYPE@@/${KERNEL_IMAGETYPE}/' \
             -e 's/@@KERNEL_BOOTCMD@@/${KERNEL_BOOTCMD}/' \
-            "${f}" > "${WORKDIR}/${base}.cmd"
-        mkimage -A ${UBOOT_ARCH} -T script -C none -n "Boot script" -d "${WORKDIR}/${base}.cmd" ${base}.scr
+            "${f}" > "${UNPACKDIR}/${base}.cmd"
+        mkimage -A ${UBOOT_ARCH} -T script -C none -n "Boot script" -d "${UNPACKDIR}/${base}.cmd" ${base}.scr
     done
 }
 
