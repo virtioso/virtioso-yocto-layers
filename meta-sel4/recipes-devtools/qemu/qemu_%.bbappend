@@ -1,3 +1,24 @@
+# QEMU with seL4 accelerator support
+#
+# This bbappend enables the seL4 QEMU accelerator from virtioso-qemu.
+# The accelerator allows QEMU to provide virtio device backends for VMs
+# running on the seL4 hypervisor.
+#
+# Source: https://github.com/virtioso/virtioso-qemu (branch: virtioso/9.2.0)
+#
+# QEMU 9.x API Changes:
+# ---------------------
+# In QEMU 9.x, the NIC initialization API changed. NICs are no longer
+# auto-created from nb_nics/nd_table. Instead, use explicit -device options:
+#
+# Old (QEMU 8.x):
+#   qemu-system-aarch64 -net nic,model=virtio -net user
+#
+# New (QEMU 9.x):
+#   qemu-system-aarch64 -device virtio-net-pci,netdev=net0 -netdev user,id=net0
+#
+# The seL4 virt machine has been updated to work with this change.
+
 QEMU_TARGETS = "aarch64"
 
 QEMU_SEL4_DEPS = ""
@@ -17,5 +38,9 @@ PACKAGECONFIG:class-target = " \
 "
 
 SRC_URI:remove = "https://download.qemu.org/${BPN}-${PV}.tar.xz"
-SRC_URI += "gitsm://github.com/tiiuae/qemu-sel4-virtio.git;protocol=https;destsuffix=${BPN}-${PV};branch=tii/main"
+SRC_URI += "gitsm://github.com/virtioso/virtioso-qemu.git;protocol=https;destsuffix=${BPN}-${PV};branch=virtioso/9.2.0"
 SRCREV = "${AUTOREV}"
+
+# Git source doesn't bundle meson subprojects like the tarball does
+# Allow meson to download them during configure
+EXTRA_OECONF:remove = "--disable-download"
