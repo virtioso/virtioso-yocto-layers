@@ -1,21 +1,24 @@
 From f4f0ca05930277253a95c91fbbbd79270f624176 Mon Sep 17 00:00:00 2001
-From: Hannu Lyytinen <hannux@ssrc.tii.ae>
+From: Hannu Lyytinen <hannu.lyytinen@unikie.com>
 Date: Tue, 21 Feb 2023 15:51:02 +0200
 Subject: [PATCH] Input event workaround
 
-Signed-off-by: Hannu Lyytinen <hannux@ssrc.tii.ae>
+Disable backpass events to device due to loopback problem between VMs.
+JIRA: HYPR-440
+
+Upstream-Status: Inappropriate [seL4-specific]
+
+Signed-off-by: Hannu Lyytinen <hannu.lyytinen@unikie.com>
 ---
- drivers/input/input.c | 10 ++++++++--
- 1 file changed, 8 insertions(+), 2 deletions(-)
+ drivers/input/input.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/input/input.c b/drivers/input/input.c
-index ba246fabc6c1..cbbf3a7b39f2 100644
 --- a/drivers/input/input.c
 +++ b/drivers/input/input.c
-@@ -388,8 +388,14 @@ static void input_handle_event(struct input_dev *dev,
- 	if (disposition != INPUT_IGNORE_EVENT && type != EV_SYN)
- 		add_input_randomness(type, code, value);
- 
+@@ -352,7 +352,12 @@ static void input_event_dispose(struct input_dev *dev, int disposition,
+ 				unsigned int type, unsigned int code, int value)
+ {
 -	if ((disposition & INPUT_PASS_TO_DEVICE) && dev->event)
 -		dev->event(dev, type, code, value);
 +	if ((disposition & INPUT_PASS_TO_DEVICE) && dev->event) {
@@ -23,7 +26,6 @@ index ba246fabc6c1..cbbf3a7b39f2 100644
 +		 * WAR: Disable backpass events to device
 +		 * due to the problem with loopback
 +		 * between VMs. JIRA: HYPR-440
-+		 * dev->event(dev, type, code, value);
 +		 */
 +	}
  
