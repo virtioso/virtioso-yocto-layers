@@ -18,13 +18,13 @@ RDEPENDS:${PN} += " \
 
 do_install:append() {
     install -d ${D}${bindir}
-    install -m 0755 ${WORKDIR}/iperf3-benchmark ${D}${bindir}
-    install -m 0755 ${WORKDIR}/fio-benchmark ${D}${bindir}
-    install -m 0755 ${WORKDIR}/console-stress-test ${D}${bindir}
+    install -m 0755 ${UNPACKDIR}/iperf3-benchmark ${D}${bindir}
+    install -m 0755 ${UNPACKDIR}/fio-benchmark ${D}${bindir}
+    install -m 0755 ${UNPACKDIR}/console-stress-test ${D}${bindir}
 
     install -d ${D}/home/root
-    install -m 0755 ${WORKDIR}/screenrc-uservm ${D}/home/root
-    install -m 0755 ${WORKDIR}/screenrc-drivervm ${D}/home/root
+    install -m 0755 ${UNPACKDIR}/screenrc-uservm ${D}/home/root
+    install -m 0755 ${UNPACKDIR}/screenrc-drivervm ${D}/home/root
 }
 
 FILES:${PN} = "\
