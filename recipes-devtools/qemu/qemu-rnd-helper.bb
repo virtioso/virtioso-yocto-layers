@@ -14,7 +14,7 @@ SRC_URI = "\
     file://qemu-rnd-helper-gui \
     "
 
-S = "${WORKDIR}"
+S = "${UNPACKDIR}"
 
 do_configure() {
     :
@@ -27,8 +27,8 @@ do_compile() {
 do_install() {
     install -d ${D}${bindir}
     install -m 0755 \
-        ${WORKDIR}/qemu-rnd-helper \
-        ${WORKDIR}/qemu-rnd-helper-gui \
+        ${UNPACKDIR}/qemu-rnd-helper \
+        ${UNPACKDIR}/qemu-rnd-helper-gui \
         ${D}${bindir}
 }
 
