@@ -1,4 +1,4 @@
-# Copyright 2022, Technology Innovation Institute
+# Copyright 2022, Unikie
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -54,29 +54,29 @@ def guest_vm_images(d):
     return set(oe.data.typed_value('VM_GUEST_IMAGES', d))
 
 def default_install_path(image, d):
-    install_dir = d.getVar('VM_GUEST_IMAGES_INSTALL_DIR', True)
-    install_ext = d.getVar('VM_GUEST_IMAGES_INSTALL_EXT', True)
+    install_dir = d.getVar('VM_GUEST_IMAGES_INSTALL_DIR')
+    install_ext = d.getVar('VM_GUEST_IMAGES_INSTALL_EXT')
 
     return os.path.join(install_dir, f"{image}.{install_ext}")
 
 def image_install_path(image, d):
-    guest_override = d.getVar('VM_GUEST_IMAGE_' + image, True)
+    guest_override = d.getVar('VM_GUEST_IMAGE_' + image)
 
     if not guest_override:
         return default_install_path(image, d)
     elif os.path.isabs(guest_override):
         return guest_override
 
-    return os.path.join(d.getVar('VM_GUEST_IMAGES_INSTALL_DIR', True), guest_override)
+    return os.path.join(d.getVar('VM_GUEST_IMAGES_INSTALL_DIR'), guest_override)
 
 def full_install_path(image, d):
-    return oe.path.join(d.getVar("IMAGE_ROOTFS", True),
+    return oe.path.join(d.getVar("IMAGE_ROOTFS"),
         image_install_path(image, d))
 
 def image_deploy_path(image, d):
-    deploy_dir = d.getVar('DEPLOY_DIR_IMAGE', True)
-    machine = d.getVar('MACHINE', True)
-    fstypes = d.getVar('VM_GUEST_IMAGES_FSTYPES', True)
+    deploy_dir = d.getVar('DEPLOY_DIR_IMAGE')
+    machine = d.getVar('MACHINE')
+    fstypes = d.getVar('VM_GUEST_IMAGES_FSTYPES')
 
     return os.path.join(deploy_dir, f"{image}-{machine}.rootfs.{fstypes}")
 
@@ -106,16 +106,16 @@ do_rootfs[vardeps] += " \
     "
 
 def check_fstypes(d):
-    fstypes = d.getVar('VM_GUEST_IMAGES_FSTYPES', True)
+    fstypes = d.getVar('VM_GUEST_IMAGES_FSTYPES')
     if not fstypes:
-        bb.fatal("%s does not define VM_GUEST_IMAGES_FSTYPES" % d.getVar('FILE', False))
+        bb.fatal("%s does not define VM_GUEST_IMAGES_FSTYPES" % d.getVar('FILE'))
     elif len(fstypes.split()) != 1:
-        bb.fatal("%s defines multiple VM_GUEST_IMAGES_FSTYPES" % d.getVar('FILE', False))
+        bb.fatal("%s defines multiple VM_GUEST_IMAGES_FSTYPES" % d.getVar('FILE'))
 
 def validate_guest_override(d):
     # Make sure either absolute, or basename
     for var in guest_override_variables(d):
-        guest_override = d.getVar(var, True)
+        guest_override = d.getVar(var)
         if not os.path.isabs(guest_override):
             if os.path.basename(guest_override) != guest_override:
                 bb.fatal("%s contains relative path" % var)

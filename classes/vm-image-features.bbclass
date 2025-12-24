@@ -1,8 +1,11 @@
-# Copyright 2022, Technology Innovation Institute
+# Copyright 2022, Unikie
 #
 # SPDX-License-Identifier: Apache-2.0
 
 inherit core-image
+
+# Development images: empty root password, root login allowed
+IMAGE_FEATURES += "allow-empty-password allow-root-login empty-root-passwd"
 
 FEATURE_PACKAGES_qemu-virtualization = "\
     qemu \

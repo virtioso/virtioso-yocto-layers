@@ -1,4 +1,4 @@
-# Copyright 2022, Technology Innovation Institute
+# Copyright 2022, Unikie
 #
 # SPDX-License-Identifier: Apache-2.0
 
