@@ -5,7 +5,7 @@
 SECTION = "x11"
 
 SRC_URI = "file://${XSESSIONFILE}"
-S = "${WORKDIR}"
+S = "${UNPACKDIR}"
 
 RDEPENDS:${PN} += " \
     mini-x-session \
@@ -31,6 +31,6 @@ do_install() {
 }
 
 python __anonymous() {
-    if not  d.getVar('XSESSIONFILE', True):
-        bb.fatal("%s does not define XSESSIONFILE" % d.getVar('FILE', False))
+    if not d.getVar('XSESSIONFILE'):
+        bb.fatal("%s does not define XSESSIONFILE" % d.getVar('FILE'))
 }
