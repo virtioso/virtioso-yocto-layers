@@ -1,18 +1,19 @@
 From eb3afe6aa89874444e5c91d41df4042818f23369 Mon Sep 17 00:00:00 2001
-From: Hannu Lyytinen <hannux@ssrc.tii.ae>
+From: Hannu Lyytinen <hannu.lyytinen@unikie.com>
 Date: Tue, 21 Feb 2023 15:52:38 +0200
 Subject: [PATCH] Add PMU as ftrace clock source
 
-Signed-off-by: Hannu Lyytinen <hannux@ssrc.tii.ae>
+Upstream-Status: Inappropriate [seL4-specific]
+
+Signed-off-by: Hannu Lyytinen <hannu.lyytinen@unikie.com>
 ---
  kernel/trace/trace.c | 12 ++++++++++++
  1 file changed, 12 insertions(+)
 
 diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
-index f752f2574630..5171998d677e 100644
 --- a/kernel/trace/trace.c
 +++ b/kernel/trace/trace.c
-@@ -1541,6 +1541,17 @@ static const char *trace_options[] = {
+@@ -1587,6 +1587,17 @@ static const char *trace_options[] = {
  	NULL
  };
  
@@ -30,11 +31,10 @@ index f752f2574630..5171998d677e 100644
  static struct {
  	u64 (*func)(void);
  	const char *name;
-@@ -1554,6 +1565,7 @@ static struct {
- 	{ ktime_get_mono_fast_ns,	"mono",		1 },
+@@ -1603,5 +1614,6 @@ static struct {
  	{ ktime_get_raw_fast_ns,	"mono_raw",	1 },
  	{ ktime_get_boot_fast_ns,	"boot",		1 },
-+	{ trace_pmu_clock,              "pmu_clock",    0 },
+ 	{ ktime_get_tai_fast_ns,	"tai",		1 },
++	{ trace_pmu_clock,		"pmu_clock",	0 },
  	ARCH_TRACE_CLOCKS
  };
- 

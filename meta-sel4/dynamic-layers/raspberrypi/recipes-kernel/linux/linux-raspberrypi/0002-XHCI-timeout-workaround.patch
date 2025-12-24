@@ -1,35 +1,42 @@
 From ee453bbc5f7ff4d6d48e390b486a343b36468b23 Mon Sep 17 00:00:00 2001
-From: Hannu Lyytinen <hannux@ssrc.tii.ae>
+From: Hannu Lyytinen <hannu.lyytinen@unikie.com>
 Date: Tue, 21 Feb 2023 15:50:09 +0200
 Subject: [PATCH] XHCI timeout workaround
 
-Signed-off-by: Hannu Lyytinen <hannux@ssrc.tii.ae>
+Clear xhc_state before handshake to avoid timeout issues in VMs.
+
+Upstream-Status: Inappropriate [seL4-specific]
+
+Signed-off-by: Hannu Lyytinen <hannu.lyytinen@unikie.com>
 ---
- drivers/usb/host/xhci.c | 7 ++++---
- 1 file changed, 4 insertions(+), 3 deletions(-)
+ drivers/usb/host/xhci.c | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
 
 diff --git a/drivers/usb/host/xhci.c b/drivers/usb/host/xhci.c
-index b72d408349a7..59f170ffe3bd 100644
 --- a/drivers/usb/host/xhci.c
 +++ b/drivers/usb/host/xhci.c
-@@ -131,7 +131,9 @@ int xhci_start(struct xhci_hcd *xhci)
+@@ -134,6 +134,9 @@ int xhci_start(struct xhci_hcd *xhci)
  {
  	u32 temp;
  	int ret;
 +	u32 xhc_state_tmp = xhci->xhc_state;
- 
++
 +	xhci->xhc_state = 0;
+ 
  	temp = readl(&xhci->op_regs->command);
  	temp |= (CMD_RUN);
- 	xhci_dbg_trace(xhci, trace_xhci_dbg_init, "// Turn on HC, cmd = 0x%x.",
-@@ -148,9 +150,8 @@ int xhci_start(struct xhci_hcd *xhci)
+@@ -151,12 +154,11 @@ int xhci_start(struct xhci_hcd *xhci)
+ 	if (ret == -ETIMEDOUT)
  		xhci_err(xhci, "Host took too long to start, "
  				"waited %u microseconds.\n",
  				XHCI_MAX_HALT_USEC);
--	if (!ret)
+-	if (!ret) {
 -		/* clear state flags. Including dying, halted or removing */
 -		xhci->xhc_state = 0;
-+	if (ret)
++	if (!ret)
+ 		xhci->run_graceperiod = jiffies + msecs_to_jiffies(500);
+-	}
++	else
 +		xhci->xhc_state = xhc_state_tmp;
  
  	return ret;
