@@ -5,7 +5,7 @@
 inherit core-image
 
 # Development images: empty root password, root login allowed
-IMAGE_FEATURES += "allow-empty-password allow-root-login empty-root-passwd"
+IMAGE_FEATURES += "allow-empty-password allow-root-login empty-root-password"
 
 FEATURE_PACKAGES_qemu-virtualization = "\
     qemu \
