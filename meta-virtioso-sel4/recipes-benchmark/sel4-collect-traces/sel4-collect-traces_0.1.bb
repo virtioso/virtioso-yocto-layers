@@ -2,6 +2,8 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 
 LICENSE = "CLOSED"
 
+S = "${UNPACKDIR}"
+
 SRC_URI += " \
     file://collect-traces.sh \
 "

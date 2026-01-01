@@ -2,6 +2,8 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 
 LICENSE = "CLOSED"
 
+S = "${UNPACKDIR}"
+
 SRC_URI += " \
     file://fio-benchmark \
     file://iperf3-benchmark \
