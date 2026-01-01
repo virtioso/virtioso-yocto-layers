@@ -1,0 +1,31 @@
+#!/bin/sh
+#
+# Minimal init for seL4 VM testing
+# Just mounts essential filesystems and starts a shell
+#
+
+echo "=== seL4 VM Minimal Init ==="
+echo "Mounting filesystems..."
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || mount -t tmpfs tmpfs /dev
+
+# Create minimal device nodes if devtmpfs not available
+[ -e /dev/console ] || mknod /dev/console c 5 1
+[ -e /dev/null ]    || mknod /dev/null c 1 3
+[ -e /dev/tty ]     || mknod /dev/tty c 5 0
+[ -e /dev/tty0 ]    || mknod /dev/tty0 c 4 0
+[ -e /dev/ttyAMA0 ] || mknod /dev/ttyAMA0 c 204 64
+[ -e /dev/ttyTCU0 ] || mknod /dev/ttyTCU0 c 238 0
+
+echo ""
+echo "=== seL4 VM Boot Complete ==="
+echo "Kernel: $(uname -r)"
+echo "Hostname: $(hostname)"
+echo ""
+cat /proc/cmdline
+echo ""
+
+# If running on console, start shell
+exec /bin/sh
