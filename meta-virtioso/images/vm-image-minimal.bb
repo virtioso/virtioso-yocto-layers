@@ -11,6 +11,17 @@ python () {
 
 inherit image
 
+# Device nodes for console - kernel needs /dev/console before running init
+# Create via ROOTFS_POSTPROCESS_COMMAND since IMAGE_DEVICE_TABLES has issues
+create_console_devices() {
+    mkdir -p ${IMAGE_ROOTFS}/dev
+    mknod -m 600 ${IMAGE_ROOTFS}/dev/console c 5 1
+    mknod -m 666 ${IMAGE_ROOTFS}/dev/null c 1 3
+    mknod -m 666 ${IMAGE_ROOTFS}/dev/tty c 5 0
+    mknod -m 666 ${IMAGE_ROOTFS}/dev/ttyAMA0 c 204 64
+}
+ROOTFS_POSTPROCESS_COMMAND:append = " create_console_devices;"
+
 # Avoid circular dependencies
 EXTRA_IMAGEDEPENDS = ""
 KERNELDEPMODDEPEND = ""
