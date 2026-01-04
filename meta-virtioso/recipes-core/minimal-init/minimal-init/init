@@ -174,6 +174,14 @@ echo "Image: ${ROOTFS_IMAGE}"
 echo "Init:  ${INIT_PATH}"
 echo ""
 
+# Load Ethernet modules (Orin AGX MGBE)
+if [ -d /lib/modules ]; then
+    echo "Loading Ethernet modules..."
+    modprobe phy-tegra194-p2u
+    modprobe nvpps
+    modprobe nvethernet
+fi
+
 # Move virtual filesystems to new root
 mount --move /sys  "${ROOTFS_MNT}/sys"  2>/dev/null || mount -t sysfs sysfs "${ROOTFS_MNT}/sys"
 mount --move /proc "${ROOTFS_MNT}/proc" 2>/dev/null || mount -t proc proc "${ROOTFS_MNT}/proc"

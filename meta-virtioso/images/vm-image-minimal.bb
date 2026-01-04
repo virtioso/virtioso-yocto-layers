@@ -24,10 +24,13 @@ ROOTFS_POSTPROCESS_COMMAND:append = " create_console_devices;"
 
 # Avoid circular dependencies
 EXTRA_IMAGEDEPENDS = ""
-KERNELDEPMODDEPEND = ""
 
-# Just our minimal init and busybox
-IMAGE_INSTALL = "minimal-init"
+# Just our minimal init and busybox, plus Ethernet modules for Orin AGX
+IMAGE_INSTALL = "minimal-init \
+    kernel-module-phy-tegra194-p2u \
+    nv-kernel-module-nvethernet \
+    nv-kernel-module-nvpps \
+"
 
 # No extra features
 IMAGE_FEATURES = ""
