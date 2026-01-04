@@ -91,7 +91,7 @@ fi
 # Mount eMMC partition (read-only for safety)
 echo "Mounting ${EMMC_PART}..."
 mkdir -p "$EMMC_MNT"
-if ! mount -o ro "$EMMC_PART" "$EMMC_MNT"; then
+if ! mount -o rw "$EMMC_PART" "$EMMC_MNT"; then
     echo "ERROR: Failed to mount ${EMMC_PART}"
     exec setsid cttyhack /bin/sh
 fi
@@ -132,17 +132,31 @@ echo "Loop device: ${LOOP_DEV}"
 
 # Mount the rootfs image
 echo "Mounting rootfs..."
-if ! mount -o ro "$LOOP_DEV" "$ROOTFS_MNT"; then
+if ! mount -o rw "$LOOP_DEV" "$ROOTFS_MNT"; then
     echo "ERROR: Failed to mount rootfs image"
     losetup -d "$LOOP_DEV"
     exec setsid cttyhack /bin/sh
 fi
 
 # Verify the rootfs has /sbin/init
-if [ ! -x "${ROOTFS_MNT}/sbin/init" ]; then
+# Note: /sbin/init may be a symlink to an absolute path like /sbin/init.sysvinit
+# We need to resolve it relative to the new rootfs, not the initramfs
+INIT_PATH="/sbin/init"
+INIT_CHECK="${ROOTFS_MNT}${INIT_PATH}"
+
+# If it's a symlink, resolve it relative to the rootfs
+if [ -L "$INIT_CHECK" ]; then
+    LINK_TARGET=$(readlink "$INIT_CHECK")
+    case "$LINK_TARGET" in
+        /*) INIT_CHECK="${ROOTFS_MNT}${LINK_TARGET}" ;;  # Absolute symlink
+        *)  INIT_CHECK="${ROOTFS_MNT}/sbin/${LINK_TARGET}" ;;  # Relative symlink
+    esac
+fi
+
+if [ ! -x "$INIT_CHECK" ]; then
     echo "WARNING: /sbin/init not found or not executable"
     echo "Contents of ${ROOTFS_MNT}/sbin:"
-    ls -la "${ROOTFS_MNT}/sbin/" | head -10
+    ls -la "${ROOTFS_MNT}/sbin/" | head -n 10
 
     # Try /init as fallback
     if [ -x "${ROOTFS_MNT}/init" ]; then
@@ -152,8 +166,6 @@ if [ ! -x "${ROOTFS_MNT}/sbin/init" ]; then
         echo "ERROR: No init found in rootfs"
         exec setsid cttyhack /bin/sh
     fi
-else
-    INIT_PATH="/sbin/init"
 fi
 
 echo ""
