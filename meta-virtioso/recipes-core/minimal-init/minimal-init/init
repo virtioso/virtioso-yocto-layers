@@ -31,10 +31,9 @@ hostname sel4-vm
 echo ""
 echo "=== seL4 VM Boot Complete ==="
 echo "Kernel: $(uname -r)"
+echo "Cmdline: $(cat /proc/cmdline)"
 echo ""
-cat /proc/cmdline
-echo ""
+echo "Starting shell on console..."
 
-# Start shell with proper controlling terminal
-# setsid creates new session, cttyhack sets controlling tty
-exec setsid cttyhack /bin/sh
+# Start interactive shell on the console device
+exec /bin/sh </dev/console >/dev/console 2>&1
