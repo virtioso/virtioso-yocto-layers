@@ -1,10 +1,22 @@
 #!/bin/sh
 #
-# Minimal init for seL4 VM testing
-# Mounts essential filesystems and starts an interactive shell
+# Minimal init for seL4 VM with eMMC rootfs support
+#
+# Boot sequence:
+# 1. Mount essential filesystems
+# 2. Wait for eMMC to appear (/dev/mmcblk0)
+# 3. Mount mmcblk0p1 (Jetson Linux rootfs partition)
+# 4. Loop-mount the VM rootfs image file
+# 5. switch_root to the new rootfs
 #
 
-echo "=== seL4 VM Minimal Init ==="
+# Configurable: rootfs image filename on mmcblk0p1
+ROOTFS_IMAGE="${ROOTFS_IMAGE:-vm-image-driver-vm-jetson-agx-orin.rootfs.ext4}"
+EMMC_PART="/dev/mmcblk0p1"
+EMMC_MNT="/mnt/emmc"
+ROOTFS_MNT="/mnt/rootfs"
+
+echo "=== seL4 VM Init ==="
 
 # Mount essential filesystems
 mount -t proc proc /proc
@@ -17,24 +29,151 @@ mount -t tmpfs tmpfs /run
 [ -e /dev/console ] || mknod -m 600 /dev/console c 5 1
 [ -e /dev/null ]    || mknod -m 666 /dev/null c 1 3
 [ -e /dev/tty ]     || mknod -m 666 /dev/tty c 5 0
-[ -e /dev/tty0 ]    || mknod -m 444 /dev/tty0 c 4 0
-[ -e /dev/ttyAMA0 ] || mknod -m 666 /dev/ttyAMA0 c 204 64
-[ -e /dev/ptmx ]    || mknod -m 666 /dev/ptmx c 5 2
 
 # Set up pseudo-terminal support
 mkdir -p /dev/pts
 mount -t devpts devpts /dev/pts 2>/dev/null
 
-# Set hostname
-hostname sel4-vm
+# Create loop device nodes (busybox losetup needs these)
+for i in 0 1 2 3 4 5 6 7; do
+    [ -e /dev/loop$i ] || mknod -m 660 /dev/loop$i b 7 $i
+done
 
-echo ""
-echo "=== seL4 VM Boot Complete ==="
 echo "Kernel: $(uname -r)"
 echo "Cmdline: $(cat /proc/cmdline)"
-echo ""
-echo "Starting shell on console..."
 
-# Start shell with proper controlling terminal for job control
-# setsid creates new session, cttyhack sets controlling tty
+# Parse kernel command line for rootfs image override
+for arg in $(cat /proc/cmdline); do
+    case "$arg" in
+        rootfs_image=*) ROOTFS_IMAGE="${arg#rootfs_image=}" ;;
+        emmc_part=*)    EMMC_PART="${arg#emmc_part=}" ;;
+        shell)          DROP_TO_SHELL=1 ;;
+    esac
+done
+
+# Check if we should just drop to shell (for debugging)
+if [ -n "$DROP_TO_SHELL" ]; then
+    echo "shell requested, dropping to shell..."
+    exec setsid cttyhack /bin/sh
+fi
+
+# Wait for eMMC device to appear
+echo "Waiting for eMMC (mmcblk0)..."
+count=0
+while [ ! -b /dev/mmcblk0 ] && [ $count -lt 50 ]; do
+    sleep 0.1
+    count=$((count + 1))
+done
+
+if [ ! -b /dev/mmcblk0 ]; then
+    echo "ERROR: eMMC not found after 5 seconds"
+    echo "Dropping to shell for debugging..."
+    exec setsid cttyhack /bin/sh
+fi
+
+echo "eMMC detected: $(cat /sys/block/mmcblk0/device/name 2>/dev/null || echo 'unknown')"
+
+# Wait for partition
+echo "Waiting for ${EMMC_PART}..."
+count=0
+while [ ! -b "$EMMC_PART" ] && [ $count -lt 30 ]; do
+    sleep 0.1
+    count=$((count + 1))
+done
+
+if [ ! -b "$EMMC_PART" ]; then
+    echo "ERROR: ${EMMC_PART} not found"
+    echo "Available partitions:"
+    ls -la /dev/mmcblk0* 2>/dev/null
+    exec setsid cttyhack /bin/sh
+fi
+
+# Mount eMMC partition (read-only for safety)
+echo "Mounting ${EMMC_PART}..."
+mkdir -p "$EMMC_MNT"
+if ! mount -o ro "$EMMC_PART" "$EMMC_MNT"; then
+    echo "ERROR: Failed to mount ${EMMC_PART}"
+    exec setsid cttyhack /bin/sh
+fi
+
+# Check for rootfs image
+ROOTFS_PATH="${EMMC_MNT}/${ROOTFS_IMAGE}"
+echo "Looking for rootfs image: ${ROOTFS_PATH}"
+
+if [ ! -f "$ROOTFS_PATH" ]; then
+    echo "ERROR: Rootfs image not found: ${ROOTFS_PATH}"
+    echo "Files in ${EMMC_MNT}:"
+    ls -la "$EMMC_MNT"/*.ext4 2>/dev/null || ls -la "$EMMC_MNT" | head -20
+    echo ""
+    echo "Hint: Upload the rootfs image to ${EMMC_PART} as ${ROOTFS_IMAGE}"
+    exec setsid cttyhack /bin/sh
+fi
+
+ROOTFS_SIZE=$(ls -lh "$ROOTFS_PATH" | awk '{print $5}')
+echo "Found rootfs image: ${ROOTFS_IMAGE} (${ROOTFS_SIZE})"
+
+# Set up loop device and mount rootfs
+echo "Setting up loop device..."
+mkdir -p "$ROOTFS_MNT"
+
+# Use losetup to attach the image to a loop device
+LOOP_DEV=$(losetup -f)
+if [ -z "$LOOP_DEV" ]; then
+    echo "ERROR: No free loop device"
+    exec setsid cttyhack /bin/sh
+fi
+
+if ! losetup "$LOOP_DEV" "$ROOTFS_PATH"; then
+    echo "ERROR: Failed to set up loop device"
+    exec setsid cttyhack /bin/sh
+fi
+
+echo "Loop device: ${LOOP_DEV}"
+
+# Mount the rootfs image
+echo "Mounting rootfs..."
+if ! mount -o ro "$LOOP_DEV" "$ROOTFS_MNT"; then
+    echo "ERROR: Failed to mount rootfs image"
+    losetup -d "$LOOP_DEV"
+    exec setsid cttyhack /bin/sh
+fi
+
+# Verify the rootfs has /sbin/init
+if [ ! -x "${ROOTFS_MNT}/sbin/init" ]; then
+    echo "WARNING: /sbin/init not found or not executable"
+    echo "Contents of ${ROOTFS_MNT}/sbin:"
+    ls -la "${ROOTFS_MNT}/sbin/" | head -10
+
+    # Try /init as fallback
+    if [ -x "${ROOTFS_MNT}/init" ]; then
+        echo "Found /init, will use that instead"
+        INIT_PATH="/init"
+    else
+        echo "ERROR: No init found in rootfs"
+        exec setsid cttyhack /bin/sh
+    fi
+else
+    INIT_PATH="/sbin/init"
+fi
+
+echo ""
+echo "=== Switching to rootfs ==="
+echo "Image: ${ROOTFS_IMAGE}"
+echo "Init:  ${INIT_PATH}"
+echo ""
+
+# Move virtual filesystems to new root
+mount --move /sys  "${ROOTFS_MNT}/sys"  2>/dev/null || mount -t sysfs sysfs "${ROOTFS_MNT}/sys"
+mount --move /proc "${ROOTFS_MNT}/proc" 2>/dev/null || mount -t proc proc "${ROOTFS_MNT}/proc"
+mount --move /dev  "${ROOTFS_MNT}/dev"  2>/dev/null || mount -t devtmpfs devtmpfs "${ROOTFS_MNT}/dev"
+
+# switch_root to the new rootfs
+# Note: switch_root will:
+# - Delete everything in the initramfs
+# - chroot to the new root
+# - Execute the specified init
+exec switch_root "$ROOTFS_MNT" "$INIT_PATH"
+
+# If switch_root fails, drop to shell
+echo "ERROR: switch_root failed!"
 exec setsid cttyhack /bin/sh
