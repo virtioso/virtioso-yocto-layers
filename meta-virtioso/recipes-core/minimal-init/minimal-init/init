@@ -35,5 +35,6 @@ echo "Cmdline: $(cat /proc/cmdline)"
 echo ""
 echo "Starting shell on console..."
 
-# Start interactive shell on the console device
-exec /bin/sh </dev/console >/dev/console 2>&1
+# Start shell with proper controlling terminal for job control
+# setsid creates new session, cttyhack sets controlling tty
+exec setsid cttyhack /bin/sh
