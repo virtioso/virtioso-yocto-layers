@@ -176,10 +176,48 @@ echo ""
 
 # Load Ethernet modules (Orin AGX MGBE)
 if [ -d /lib/modules ]; then
+    # Debug: dump ethernet DT properties
+    echo "=== Ethernet DT properties ==="
+    ETHDT="/proc/device-tree/bus@0/ethernet@6800000"
+    if [ -d "$ETHDT" ]; then
+        echo "Properties in ethernet node:"
+        ls "$ETHDT" 2>/dev/null | tr '\n' ' '
+        echo ""
+        echo "ptp-rx-queue: $(cat $ETHDT/nvidia,ptp-rx-queue 2>/dev/null | xxd -p || echo 'MISSING')"
+        echo "mtl-queues: $(cat $ETHDT/nvidia,mtl-queues 2>/dev/null | xxd -p || echo 'MISSING')"
+        echo "num-mtl-queues: $(cat $ETHDT/nvidia,num-mtl-queues 2>/dev/null | xxd -p || echo 'MISSING')"
+        echo "num-dma-chans: $(cat $ETHDT/nvidia,num-dma-chans 2>/dev/null | xxd -p || echo 'MISSING')"
+        echo "compatible: $(cat $ETHDT/compatible 2>/dev/null || echo 'MISSING')"
+    else
+        echo "ERROR: $ETHDT not found!"
+        echo "Contents of bus@0:"
+        ls /proc/device-tree/bus@0/ 2>/dev/null | tr '\n' ' '
+        echo ""
+    fi
+    echo "=== End Ethernet DT ==="
+
     echo "Loading Ethernet modules..."
     modprobe phy-tegra194-p2u
     modprobe nvpps
     modprobe nvethernet
+
+    # Wait for eth0 to appear
+    echo "Waiting for eth0..."
+    count=0
+    while [ ! -e /sys/class/net/eth0 ] && [ $count -lt 30 ]; do
+        sleep 0.1
+        count=$((count + 1))
+    done
+
+    if [ -e /sys/class/net/eth0 ]; then
+        echo "Configuring eth0 with 192.168.101.112/24..."
+        ip link set dev eth0 up
+        ip addr add 192.168.101.112/24 dev eth0
+        ip link show eth0
+        ip addr show eth0
+    else
+        echo "WARNING: eth0 not found after 3 seconds"
+    fi
 fi
 
 # Move virtual filesystems to new root
