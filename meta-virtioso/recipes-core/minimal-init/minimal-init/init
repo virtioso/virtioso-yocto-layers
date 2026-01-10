@@ -4,178 +4,78 @@
 #
 # Boot sequence:
 # 1. Mount essential filesystems
-# 2. Wait for eMMC to appear (/dev/mmcblk0)
-# 3. Mount mmcblk0p1 (Jetson Linux rootfs partition)
-# 4. Loop-mount the VM rootfs image file
-# 5. switch_root to the new rootfs
+# 2. Initialize ethernet (early, for debugging/SSH access)
+# 3. Wait for eMMC to appear (/dev/mmcblk0)
+# 4. Mount mmcblk0p1 (Jetson Linux rootfs partition)
+# 5. Loop-mount the VM rootfs image file
+# 6. switch_root to the new rootfs
 #
 
-# Configurable: rootfs image filename on mmcblk0p1
+# Configurable defaults
 ROOTFS_IMAGE="${ROOTFS_IMAGE:-vm-image-driver-vm-jetson-agx-orin.rootfs.ext4}"
 EMMC_PART="/dev/mmcblk0p1"
 EMMC_MNT="/mnt/emmc"
 ROOTFS_MNT="/mnt/rootfs"
+DROP_TO_SHELL=""
 
-echo "=== seL4 VM Init ==="
+#############################################################################
+# Functions
+#############################################################################
 
-# Mount essential filesystems
-mount -t proc proc /proc
-mount -t sysfs sysfs /sys
-mount -t devtmpfs devtmpfs /dev 2>/dev/null || mount -t tmpfs tmpfs /dev
-mount -t tmpfs tmpfs /tmp
-mount -t tmpfs tmpfs /run
+mount_essential_filesystems() {
+    mount -t proc proc /proc
+    mount -t sysfs sysfs /sys
+    mount -t devtmpfs devtmpfs /dev 2>/dev/null || mount -t tmpfs tmpfs /dev
+    mount -t tmpfs tmpfs /tmp
+    mount -t tmpfs tmpfs /run
 
-# Create device nodes if devtmpfs not available
-[ -e /dev/console ] || mknod -m 600 /dev/console c 5 1
-[ -e /dev/null ]    || mknod -m 666 /dev/null c 1 3
-[ -e /dev/tty ]     || mknod -m 666 /dev/tty c 5 0
+    # Create device nodes if devtmpfs not available
+    [ -e /dev/console ] || mknod -m 600 /dev/console c 5 1
+    [ -e /dev/null ]    || mknod -m 666 /dev/null c 1 3
+    [ -e /dev/tty ]     || mknod -m 666 /dev/tty c 5 0
 
-# Set up pseudo-terminal support
-mkdir -p /dev/pts
-mount -t devpts devpts /dev/pts 2>/dev/null
+    # Set up pseudo-terminal support
+    mkdir -p /dev/pts
+    mount -t devpts devpts /dev/pts 2>/dev/null
 
-# Create loop device nodes (busybox losetup needs these)
-for i in 0 1 2 3 4 5 6 7; do
-    [ -e /dev/loop$i ] || mknod -m 660 /dev/loop$i b 7 $i
-done
+    # Create loop device nodes (busybox losetup needs these)
+    for i in 0 1 2 3 4 5 6 7; do
+        [ -e /dev/loop$i ] || mknod -m 660 /dev/loop$i b 7 $i
+    done
+}
 
-echo "Kernel: $(uname -r)"
-echo "Cmdline: $(cat /proc/cmdline)"
+parse_cmdline() {
+    for arg in $(cat /proc/cmdline); do
+        case "$arg" in
+            rootfs_image=*) ROOTFS_IMAGE="${arg#rootfs_image=}" ;;
+            emmc_part=*)    EMMC_PART="${arg#emmc_part=}" ;;
+            shell)          DROP_TO_SHELL=1 ;;
+        esac
+    done
+}
 
-# Parse kernel command line for rootfs image override
-for arg in $(cat /proc/cmdline); do
-    case "$arg" in
-        rootfs_image=*) ROOTFS_IMAGE="${arg#rootfs_image=}" ;;
-        emmc_part=*)    EMMC_PART="${arg#emmc_part=}" ;;
-        shell)          DROP_TO_SHELL=1 ;;
-    esac
-done
-
-# Check if we should just drop to shell (for debugging)
-if [ -n "$DROP_TO_SHELL" ]; then
-    echo "shell requested, dropping to shell..."
-    exec setsid cttyhack /bin/sh
-fi
-
-# Wait for eMMC device to appear
-echo "Waiting for eMMC (mmcblk0)..."
-count=0
-while [ ! -b /dev/mmcblk0 ] && [ $count -lt 50 ]; do
-    sleep 0.1
-    count=$((count + 1))
-done
-
-if [ ! -b /dev/mmcblk0 ]; then
-    echo "ERROR: eMMC not found after 5 seconds"
-    echo "Dropping to shell for debugging..."
-    exec setsid cttyhack /bin/sh
-fi
-
-echo "eMMC detected: $(cat /sys/block/mmcblk0/device/name 2>/dev/null || echo 'unknown')"
-
-# Wait for partition
-echo "Waiting for ${EMMC_PART}..."
-count=0
-while [ ! -b "$EMMC_PART" ] && [ $count -lt 30 ]; do
-    sleep 0.1
-    count=$((count + 1))
-done
-
-if [ ! -b "$EMMC_PART" ]; then
-    echo "ERROR: ${EMMC_PART} not found"
-    echo "Available partitions:"
-    ls -la /dev/mmcblk0* 2>/dev/null
-    exec setsid cttyhack /bin/sh
-fi
-
-# Mount eMMC partition (read-only for safety)
-echo "Mounting ${EMMC_PART}..."
-mkdir -p "$EMMC_MNT"
-if ! mount -o rw "$EMMC_PART" "$EMMC_MNT"; then
-    echo "ERROR: Failed to mount ${EMMC_PART}"
-    exec setsid cttyhack /bin/sh
-fi
-
-# Check for rootfs image
-ROOTFS_PATH="${EMMC_MNT}/${ROOTFS_IMAGE}"
-echo "Looking for rootfs image: ${ROOTFS_PATH}"
-
-if [ ! -f "$ROOTFS_PATH" ]; then
-    echo "ERROR: Rootfs image not found: ${ROOTFS_PATH}"
-    echo "Files in ${EMMC_MNT}:"
-    ls -la "$EMMC_MNT"/*.ext4 2>/dev/null || ls -la "$EMMC_MNT" | head -20
-    echo ""
-    echo "Hint: Upload the rootfs image to ${EMMC_PART} as ${ROOTFS_IMAGE}"
-    exec setsid cttyhack /bin/sh
-fi
-
-ROOTFS_SIZE=$(ls -lh "$ROOTFS_PATH" | awk '{print $5}')
-echo "Found rootfs image: ${ROOTFS_IMAGE} (${ROOTFS_SIZE})"
-
-# Set up loop device and mount rootfs
-echo "Setting up loop device..."
-mkdir -p "$ROOTFS_MNT"
-
-# Use losetup to attach the image to a loop device
-LOOP_DEV=$(losetup -f)
-if [ -z "$LOOP_DEV" ]; then
-    echo "ERROR: No free loop device"
-    exec setsid cttyhack /bin/sh
-fi
-
-if ! losetup "$LOOP_DEV" "$ROOTFS_PATH"; then
-    echo "ERROR: Failed to set up loop device"
-    exec setsid cttyhack /bin/sh
-fi
-
-echo "Loop device: ${LOOP_DEV}"
-
-# Mount the rootfs image
-echo "Mounting rootfs..."
-if ! mount -o rw "$LOOP_DEV" "$ROOTFS_MNT"; then
-    echo "ERROR: Failed to mount rootfs image"
-    losetup -d "$LOOP_DEV"
-    exec setsid cttyhack /bin/sh
-fi
-
-# Verify the rootfs has /sbin/init
-# Note: /sbin/init may be a symlink to an absolute path like /sbin/init.sysvinit
-# We need to resolve it relative to the new rootfs, not the initramfs
-INIT_PATH="/sbin/init"
-INIT_CHECK="${ROOTFS_MNT}${INIT_PATH}"
-
-# If it's a symlink, resolve it relative to the rootfs
-if [ -L "$INIT_CHECK" ]; then
-    LINK_TARGET=$(readlink "$INIT_CHECK")
-    case "$LINK_TARGET" in
-        /*) INIT_CHECK="${ROOTFS_MNT}${LINK_TARGET}" ;;  # Absolute symlink
-        *)  INIT_CHECK="${ROOTFS_MNT}/sbin/${LINK_TARGET}" ;;  # Relative symlink
-    esac
-fi
-
-if [ ! -x "$INIT_CHECK" ]; then
-    echo "WARNING: /sbin/init not found or not executable"
-    echo "Contents of ${ROOTFS_MNT}/sbin:"
-    ls -la "${ROOTFS_MNT}/sbin/" | head -n 10
-
-    # Try /init as fallback
-    if [ -x "${ROOTFS_MNT}/init" ]; then
-        echo "Found /init, will use that instead"
-        INIT_PATH="/init"
+dump_p2u_dt() {
+    # Debug: dump P2U PHY DT node
+    echo "=== P2U PHY DT check ==="
+    P2UDT="/proc/device-tree/bus@0/phy@3f20000"
+    if [ -d "$P2UDT" ]; then
+        echo "P2U node found at $P2UDT"
+        echo "Properties:"
+        ls "$P2UDT" 2>/dev/null | tr '\n' ' '
+        echo ""
+        echo "compatible: $(cat $P2UDT/compatible 2>/dev/null || echo 'MISSING')"
+        echo "status: $(cat $P2UDT/status 2>/dev/null || echo 'MISSING')"
+        echo "reg: $(cat $P2UDT/reg 2>/dev/null | xxd -p | dd bs=64 count=1 2>/dev/null)"
+        echo "nvidia,bpmp: $(cat $P2UDT/nvidia,bpmp 2>/dev/null | xxd -p || echo 'MISSING')"
     else
-        echo "ERROR: No init found in rootfs"
-        exec setsid cttyhack /bin/sh
+        echo "ERROR: P2U node NOT found at $P2UDT"
+        echo "Searching for any phy nodes in bus@0:"
+        find /proc/device-tree/bus@0 -name "phy*" 2>/dev/null | head -n 10
     fi
-fi
+    echo "=== End P2U DT check ==="
+}
 
-echo ""
-echo "=== Switching to rootfs ==="
-echo "Image: ${ROOTFS_IMAGE}"
-echo "Init:  ${INIT_PATH}"
-echo ""
-
-# Load Ethernet modules (Orin AGX MGBE)
-if [ -d /lib/modules ]; then
+dump_ethernet_dt() {
     # Debug: dump ethernet DT properties
     echo "=== Ethernet DT properties ==="
     ETHDT="/proc/device-tree/bus@0/ethernet@6800000"
@@ -183,11 +83,12 @@ if [ -d /lib/modules ]; then
         echo "Properties in ethernet node:"
         ls "$ETHDT" 2>/dev/null | tr '\n' ' '
         echo ""
+        echo "compatible: $(cat $ETHDT/compatible 2>/dev/null || echo 'MISSING')"
+        echo "status: $(cat $ETHDT/status 2>/dev/null || echo 'MISSING')"
         echo "ptp-rx-queue: $(cat $ETHDT/nvidia,ptp-rx-queue 2>/dev/null | xxd -p || echo 'MISSING')"
         echo "mtl-queues: $(cat $ETHDT/nvidia,mtl-queues 2>/dev/null | xxd -p || echo 'MISSING')"
         echo "num-mtl-queues: $(cat $ETHDT/nvidia,num-mtl-queues 2>/dev/null | xxd -p || echo 'MISSING')"
         echo "num-dma-chans: $(cat $ETHDT/nvidia,num-dma-chans 2>/dev/null | xxd -p || echo 'MISSING')"
-        echo "compatible: $(cat $ETHDT/compatible 2>/dev/null || echo 'MISSING')"
     else
         echo "ERROR: $ETHDT not found!"
         echo "Contents of bus@0:"
@@ -196,42 +97,591 @@ if [ -d /lib/modules ]; then
     fi
     echo "=== End Ethernet DT ==="
 
+    # Check PHY node DT properties (for interrupt config)
+    echo "=== PHY DT properties ==="
+    PHYDT="/proc/device-tree/bus@0/ethernet@6800000/mdio/phy@0"
+    if [ -d "$PHYDT" ]; then
+        echo "PHY node found at $PHYDT"
+        echo "Properties:"
+        ls "$PHYDT" 2>/dev/null | tr '\n' ' '
+        echo ""
+        echo "compatible: $(cat $PHYDT/compatible 2>/dev/null | tr '\0' ' ')"
+        echo "reg: $(cat $PHYDT/reg 2>/dev/null | xxd -p)"
+        echo "interrupt-parent phandle: $(cat $PHYDT/interrupt-parent 2>/dev/null | xxd -p || echo 'MISSING')"
+        echo "interrupts: $(cat $PHYDT/interrupts 2>/dev/null | xxd -p || echo 'MISSING')"
+    else
+        echo "ERROR: PHY node NOT found at $PHYDT"
+    fi
+    # Check GPIO node phandle
+    GPIODT="/proc/device-tree/bus@0/gpio@2200000"
+    if [ -d "$GPIODT" ]; then
+        echo "GPIO node phandle: $(cat $GPIODT/phandle 2>/dev/null | xxd -p || echo 'NO PHANDLE')"
+        echo "GPIO #interrupt-cells: $(cat $GPIODT/#interrupt-cells 2>/dev/null | xxd -p || echo 'MISSING')"
+    fi
+    echo "=== End PHY DT ==="
+}
+
+init_ethernet() {
+    # Early ethernet initialization - allows SSH debugging even if later steps fail
+    if [ ! -d /lib/modules ]; then
+        echo "No kernel modules in initramfs, skipping ethernet"
+        return
+    fi
+
+    dump_p2u_dt
+    dump_ethernet_dt
+
+    # Mount debugfs for clock status
+    if [ ! -d /sys/kernel/debug/clk ]; then
+        mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null
+    fi
+
+    echo "=== Clock status before modprobe ==="
+    if [ -f /sys/kernel/debug/clk/clk_summary ]; then
+        cat /sys/kernel/debug/clk/clk_summary 2>/dev/null | grep -E "mgbe0|uphy_gbe"
+    else
+        echo "debugfs clk_summary not available"
+    fi
+    echo "=== End clock status ==="
+
     echo "Loading Ethernet modules..."
-    modprobe phy-tegra194-p2u
+    echo "  Loading phy-tegra194-p2u..."
+    modprobe phy-tegra194-p2u 2>&1
+    # Check if P2U driver bound to any device
+    if [ -d /sys/bus/platform/drivers/tegra194-p2u ]; then
+        echo "  P2U driver registered, bound devices:"
+        ls -la /sys/bus/platform/drivers/tegra194-p2u/ 2>/dev/null | grep phy || echo "    (none)"
+    else
+        echo "  WARNING: P2U driver NOT registered!"
+    fi
     modprobe nvpps
     modprobe nvethernet
+
+    echo "=== Clock status after modprobe ==="
+    if [ -f /sys/kernel/debug/clk/clk_summary ]; then
+        cat /sys/kernel/debug/clk/clk_summary 2>/dev/null | grep -E "mgbe0|uphy_gbe"
+    else
+        echo "debugfs clk_summary not available"
+    fi
+    echo "=== End clock status ==="
+
+    echo "=== Power domain status ==="
+    if [ -f /sys/kernel/debug/pm_genpd/pm_genpd_summary ]; then
+        cat /sys/kernel/debug/pm_genpd/pm_genpd_summary 2>/dev/null | grep -E "mgbe|MGBE|ethernet"
+    else
+        echo "pm_genpd_summary not available"
+    fi
+    echo "=== End power domain status ==="
+
+    echo "=== PM runtime status for ethernet ==="
+    ETHPM="/sys/devices/platform/bus@0/6800000.ethernet/power"
+    if [ -d "$ETHPM" ]; then
+        echo "runtime_status: $(cat $ETHPM/runtime_status 2>/dev/null || echo 'N/A')"
+        echo "runtime_suspended_time: $(cat $ETHPM/runtime_suspended_time 2>/dev/null || echo 'N/A')"
+        echo "runtime_active_time: $(cat $ETHPM/runtime_active_time 2>/dev/null || echo 'N/A')"
+        echo "control: $(cat $ETHPM/control 2>/dev/null || echo 'N/A')"
+    else
+        echo "Power sysfs not available for ethernet"
+    fi
+    echo "=== End PM runtime status ==="
+
+    echo "=== BPMP power domain provider check ==="
+    if [ -d /sys/bus/platform/drivers/tegra-bpmp ]; then
+        echo "tegra-bpmp driver registered"
+        ls -la /sys/bus/platform/drivers/tegra-bpmp/ 2>/dev/null | grep -v "^total"
+    else
+        echo "ERROR: tegra-bpmp driver NOT registered!"
+    fi
+    if [ -d /sys/devices/platform/bpmp ]; then
+        echo "BPMP device found"
+        echo "BPMP power state: $(cat /sys/devices/platform/bpmp/power/runtime_status 2>/dev/null || echo 'N/A')"
+    else
+        echo "ERROR: BPMP device NOT found!"
+    fi
+    echo "=== End BPMP check ==="
 
     # Wait for eth0 to appear
     echo "Waiting for eth0..."
     count=0
-    while [ ! -e /sys/class/net/eth0 ] && [ $count -lt 30 ]; do
+    while [ ! -e /sys/class/net/eth0 ] && [ $count -lt 50 ]; do
         sleep 0.1
         count=$((count + 1))
     done
 
     if [ -e /sys/class/net/eth0 ]; then
-        echo "Configuring eth0 with 192.168.101.112/24..."
+        echo "Configuring eth0 with DHCP..."
         ip link set dev eth0 up
-        ip addr add 192.168.101.112/24 dev eth0
+
+        # Check PM runtime status after bringing up interface
+        echo "=== PM runtime status AFTER ip link up ==="
+        ETHPM="/sys/devices/platform/bus@0/6800000.ethernet/power"
+        if [ -d "$ETHPM" ]; then
+            echo "runtime_status: $(cat $ETHPM/runtime_status 2>/dev/null || echo 'N/A')"
+            echo "runtime_active_time: $(cat $ETHPM/runtime_active_time 2>/dev/null || echo 'N/A')"
+        fi
+        echo "Power domain after up:"
+        cat /sys/kernel/debug/pm_genpd/pm_genpd_summary 2>/dev/null | grep -E "mgbe|ethernet"
+        echo "Clock status after up:"
+        cat /sys/kernel/debug/clk/clk_summary 2>/dev/null | grep -E "mgbe0_tx |mgbe0_mac |uphy_gbe"
+        echo "=== End post-up check ==="
+
+        # Check PHY state via sysfs and ethtool
+        echo "=== PHY state check ==="
+        echo "Carrier: $(cat /sys/class/net/eth0/carrier 2>/dev/null)"
+        echo "Operstate: $(cat /sys/class/net/eth0/operstate 2>/dev/null)"
+        echo "Speed: $(cat /sys/class/net/eth0/speed 2>/dev/null)"
+        echo "Duplex: $(cat /sys/class/net/eth0/duplex 2>/dev/null)"
+        if command -v ethtool >/dev/null 2>&1; then
+            ethtool eth0 2>&1
+        else
+            echo "ethtool not available in initramfs"
+        fi
+        # Check MDIO/PHY sysfs
+        PHYPATH="/sys/class/net/eth0/phydev"
+        if [ -d "$PHYPATH" ]; then
+            echo "PHY device found at $PHYPATH"
+            # Read all PHY sysfs files
+            for f in phy_id phy_interface phy_has_fixups phy_dev_flags; do
+                val=$(cat "$PHYPATH/$f" 2>/dev/null || echo 'N/A')
+                echo "  $f: $val"
+            done
+            # Check PHY driver
+            echo "  PHY driver: $(basename $(readlink $PHYPATH/driver 2>/dev/null) 2>/dev/null || echo 'N/A')"
+            # Read PHY statistics (shows MDIO communication activity)
+            echo "  PHY MDIO statistics:"
+            if [ -d "$PHYPATH/statistics" ]; then
+                for f in $PHYPATH/statistics/*; do
+                    fname=$(basename $f)
+                    val=$(cat $f 2>/dev/null || echo 'N/A')
+                    echo "    $fname: $val"
+                done
+            else
+                echo "    (no statistics available)"
+            fi
+            # Check for hwmon (Aquantia PHY has temp sensor)
+            if [ -d "$PHYPATH/hwmon" ]; then
+                echo "  PHY hwmon detected (MDIO working)"
+                for f in $PHYPATH/hwmon/hwmon*/temp1_input; do
+                    if [ -f "$f" ]; then
+                        val=$(cat $f 2>/dev/null)
+                        echo "    PHY temp: $((val / 1000)).$((val % 1000 / 100))°C"
+                    fi
+                done
+            fi
+            # Check if PHY is using interrupt mode (check /proc/interrupts for PHY IRQ)
+            PHY_IRQ_LINE=$(grep -E "ethernet.*:00|phy" /proc/interrupts 2>/dev/null | head -n 1)
+            if [ -n "$PHY_IRQ_LINE" ]; then
+                # Extract IRQ number and count from /proc/interrupts
+                PHY_IRQ_NUM=$(echo "$PHY_IRQ_LINE" | awk '{print $1}' | tr -d ':')
+                PHY_IRQ_COUNT=$(echo "$PHY_IRQ_LINE" | awk '{print $2}')
+                PHY_IRQ_CHIP=$(echo "$PHY_IRQ_LINE" | awk '{print $3}')
+                PHY_IRQ_HWIRQ=$(echo "$PHY_IRQ_LINE" | awk '{print $4}')
+                echo "  PHY interrupt mode: ENABLED"
+                echo "    IRQ: $PHY_IRQ_NUM (hwirq=$PHY_IRQ_HWIRQ via $PHY_IRQ_CHIP)"
+                echo "    Count: $PHY_IRQ_COUNT (will increase on link state changes)"
+            else
+                echo "  PHY interrupt mode: DISABLED (polling)"
+            fi
+        else
+            echo "PHY device sysfs not found"
+            ls -la /sys/class/net/eth0/ 2>/dev/null
+        fi
+        # Check /proc/interrupts for PHY-related interrupts
+        echo "PHY-related interrupts:"
+        cat /proc/interrupts 2>/dev/null | grep -iE "phy|mdio|gpio" || echo "  none found"
+        # Show all GPIO controller interrupts
+        echo "All GPIO-related /proc/interrupts:"
+        cat /proc/interrupts 2>/dev/null | grep -E "2200000|gpio" || echo "  none"
+        # Show GIC interrupts for GPIO banks (INTID 320-367 = SPI 288-335)
+        echo "GIC interrupts for GPIO banks (INTID 320-367):"
+        cat /proc/interrupts 2>/dev/null | head -n 1  # header
+        cat /proc/interrupts 2>/dev/null | grep -E "^32[0-9]:|^33[0-9]:|^34[0-9]:|^35[0-9]:|^36[0-7]:" || echo "  none found"
+        # Show total GPIO bank interrupt counts
+        echo "All GIC-ARM interrupts:"
+        cat /proc/interrupts 2>/dev/null | grep -E "GIC-.*ARM" | head -n 20
+        # Check for phylink messages in dmesg
+        echo "Recent PHY/link dmesg:"
+        dmesg | grep -i "phylink\|link state\|attached\|phy:" | tail -n 10
+        # Check for IRQ mapping errors
+        echo "IRQ/interrupt dmesg errors:"
+        dmesg | grep -iE "irq.*fail\|irq.*error\|interrupt.*fail\|of_irq\|irq_create\|irq_find" | tail -n 15
+        # Check PHY reset GPIO (Y1=145 or 123 depending on numbering)
+        echo "=== PHY Reset GPIO check ==="
+        # Check if gpioinfo or gpiod tools available
+        if command -v gpioinfo >/dev/null 2>&1; then
+            gpioinfo gpiochip0 2>/dev/null | grep -E "line.*12[0-9]|Y" | head -n 10
+        else
+            echo "gpioinfo not available"
+        fi
+        # Check GPIO consumers via /sys/kernel/debug/gpio
+        if [ -f /sys/kernel/debug/gpio ]; then
+            echo "GPIO debug info:"
+            cat /sys/kernel/debug/gpio 2>/dev/null | grep -iE "phy|eth|Y|12[0-9]" | head -n 10
+        else
+            echo "GPIO debug not available"
+        fi
+        # Check PHY reset GPIO DT property
+        ETHDT="/proc/device-tree/bus@0/ethernet@6800000"
+        if [ -f "$ETHDT/nvidia,phy-reset-gpio" ]; then
+            echo "PHY reset GPIO DT: $(cat $ETHDT/nvidia,phy-reset-gpio | xxd -p)"
+        else
+            echo "ERROR: nvidia,phy-reset-gpio not found in DT"
+        fi
+        # Check GPIO controller status
+        echo "=== GPIO controller status ==="
+        # Check if GPIO driver is registered
+        if [ -d /sys/bus/platform/drivers/tegra186-gpio ]; then
+            echo "tegra186-gpio driver registered"
+            echo "Bound devices:"
+            ls -la /sys/bus/platform/drivers/tegra186-gpio/ 2>/dev/null | grep -E "gpio|phy"
+        else
+            echo "ERROR: tegra186-gpio driver NOT registered!"
+        fi
+        # Check pinmux configuration for port Y pins
+        echo "=== Pinmux status for port Y (PHY GPIO pins) ==="
+        if [ -d /sys/kernel/debug/pinctrl ]; then
+            echo "Pinctrl debug dirs:"
+            ls /sys/kernel/debug/pinctrl/ 2>/dev/null
+            for dir in /sys/kernel/debug/pinctrl/2430000*; do
+                if [ -d "$dir" ]; then
+                    echo "Pinmux at $(basename $dir):"
+                    if [ -f "$dir/pinmux-pins" ]; then
+                        echo "Port Y pins (PY.00-PY.07):"
+                        cat "$dir/pinmux-pins" 2>/dev/null | grep -iE "soc_gpio48|soc_gpio49|soc_gpio50|soc_gpio51" | head -n 8
+                    fi
+                    if [ -f "$dir/pins" ]; then
+                        echo "All PY pins:"
+                        cat "$dir/pins" 2>/dev/null | grep -iE "soc_gpio4[89]|soc_gpio5[0-5]" | head -n 8
+                    fi
+                fi
+            done
+        else
+            echo "pinctrl debug not available"
+        fi
+        echo "=== End pinmux status ==="
+        # Check GPIO device in platform bus
+        if [ -d /sys/devices/platform/bus@0/2200000.gpio ]; then
+            echo "GPIO device found at /sys/devices/platform/bus@0/2200000.gpio"
+            echo "Driver link: $(readlink /sys/devices/platform/bus@0/2200000.gpio/driver 2>/dev/null || echo 'NO DRIVER BOUND')"
+            echo "Supplier links:"
+            ls -la /sys/devices/platform/bus@0/2200000.gpio/supplier* 2>/dev/null | head -n 5
+        else
+            echo "ERROR: GPIO device NOT found at /sys/devices/platform/bus@0/2200000.gpio"
+            echo "Platform devices in bus@0:"
+            ls /sys/devices/platform/bus@0/ 2>/dev/null | grep -E "gpio|2200000" | head -n 10
+        fi
+        # Check GPIO DT node
+        if [ -d /proc/device-tree/bus@0/gpio@2200000 ]; then
+            echo "GPIO DT node found"
+            echo "compatible: $(cat /proc/device-tree/bus@0/gpio@2200000/compatible 2>/dev/null | tr '\0' ' ')"
+            echo "status: $(cat /proc/device-tree/bus@0/gpio@2200000/status 2>/dev/null | tr '\0' ' ')"
+            # Count GPIO interrupts (each interrupt is 12 bytes: 3 cells of 4 bytes)
+            INTSIZE=$(cat /proc/device-tree/bus@0/gpio@2200000/interrupts 2>/dev/null | wc -c)
+            INTCOUNT=$((INTSIZE / 12))
+            echo "interrupts: $INTCOUNT interrupts ($INTSIZE bytes)"
+            echo "first 4 interrupts (hex):"
+            cat /proc/device-tree/bus@0/gpio@2200000/interrupts 2>/dev/null | xxd -p | dd bs=24 count=4 2>/dev/null
+        else
+            echo "ERROR: GPIO DT node NOT found at /proc/device-tree/bus@0/gpio@2200000"
+        fi
+        # Check gpio chip registration
+        if [ -d /sys/class/gpio ]; then
+            echo "GPIO chips registered:"
+            ls /sys/class/gpio/ 2>/dev/null
+        else
+            echo "GPIO class not available (may be legacy sysfs disabled)"
+        fi
+        # Check gpiochip in /sys/bus/gpio
+        if [ -d /sys/bus/gpio/devices ]; then
+            echo "GPIO bus devices:"
+            ls /sys/bus/gpio/devices/ 2>/dev/null | head -n 10
+        fi
+        # Check GPIO line count - important for IRQ domain translation
+        echo "=== GPIO line details ==="
+        if [ -d /sys/bus/gpio/devices/gpiochip0 ]; then
+            NGPIO=$(cat /sys/bus/gpio/devices/gpiochip0/ngpio 2>/dev/null)
+            BASE=$(cat /sys/bus/gpio/devices/gpiochip0/base 2>/dev/null)
+            LABEL=$(cat /sys/bus/gpio/devices/gpiochip0/label 2>/dev/null)
+            echo "  gpiochip0: label=$LABEL base=$BASE ngpio=$NGPIO"
+        fi
+        # Show GPIO ranges from DT
+        if [ -f /proc/device-tree/bus@0/gpio@2200000/gpio-ranges ]; then
+            echo "  gpio-ranges (from DT):"
+            cat /proc/device-tree/bus@0/gpio@2200000/gpio-ranges | xxd -p | head -c 64
+            echo ""
+        fi
+        # Check native Linux for comparison if SSH available
+        echo "=== IRQ domain info ==="
+        if [ -f /proc/irq/85/spurious ]; then
+            cat /proc/irq/85/spurious 2>/dev/null
+        fi
+        # Try to dump irqdomain info if available
+        if [ -d /sys/kernel/debug/irq ]; then
+            echo "  IRQ debug available"
+            ls /sys/kernel/debug/irq/ 2>/dev/null | head -n 5
+        fi
+        echo "=== End GPIO line details ==="
+        # Check for deferred probe
+        echo "Deferred probe status:"
+        cat /sys/kernel/debug/devices_deferred 2>/dev/null | grep -E "gpio|2200000" | head -n 10
+        # Check GPIO interrupt controller (for PHY interrupt)
+        echo "Interrupt controller tree:"
+        for ic in /proc/device-tree/*/interrupt-controller*; do
+            [ -d "$ic" ] && echo "  $ic: $(cat $ic/compatible 2>/dev/null | tr '\0' ' ')"
+        done
+        for ic in /proc/device-tree/bus@0/*/interrupt-controller*; do
+            [ -f "$ic" ] && echo "  $(dirname $ic) is interrupt-controller"
+        done
+        # Check nvethernet PHY reset GPIO error in dmesg
+        echo "GPIO/gpiod dmesg:"
+        dmesg | grep -i "phy-reset\|gpio\|gpiod" | tail -15
+        echo "=== End GPIO check ==="
+        echo "=== End PHY check ==="
+
+        # Wait for link to come up (XPCS lane init can take 15-20 seconds)
+        echo "Waiting for link (XPCS lane initialization)..."
+        count=0
+        while [ $count -lt 300 ]; do  # 30 seconds max
+            CARRIER=$(cat /sys/class/net/eth0/carrier 2>/dev/null || echo "0")
+            if [ "$CARRIER" = "1" ]; then
+                echo "Link is UP after $((count/10)) seconds!"
+                break
+            fi
+            if [ $((count % 50)) -eq 0 ]; then
+                echo "  Still waiting... ($((count/10)) seconds)"
+                # Check PHY link status via MDIO read
+                PHYPATH="/sys/class/net/eth0/phydev"
+                if [ -d "$PHYPATH" ]; then
+                    LINK=$(cat /sys/class/net/eth0/carrier 2>/dev/null)
+                    OPSTATE=$(cat /sys/class/net/eth0/operstate 2>/dev/null)
+                    echo "    carrier=$LINK operstate=$OPSTATE"
+                fi
+                dmesg | grep -i "xpcs\|lane\|PCS\|block lock\|link\|adjust" | tail -3
+            fi
+            sleep 0.1
+            count=$((count + 1))
+        done
+
+        if [ "$CARRIER" != "1" ]; then
+            echo "WARNING: Link still DOWN after 30 seconds"
+            dmesg | grep -i "xpcs\|lane\|PCS\|mgbe\|ethernet" | tail -20
+        fi
+
+        # Run udhcpc in background - will configure interface when lease obtained
+        if [ -x /etc/udhcpc.d/default.script ]; then
+            udhcpc -i eth0 -s /etc/udhcpc.d/default.script -b -q &
+        else
+            # Fallback to static IP if no DHCP script
+            echo "No DHCP script, using static IP 192.168.101.112/24"
+            ip addr add 192.168.101.112/24 dev eth0
+        fi
         ip link show eth0
-        ip addr show eth0
+        echo "Ethernet ready (DHCP in background)"
     else
-        echo "WARNING: eth0 not found after 3 seconds"
+        echo "WARNING: eth0 not found after 5 seconds"
+        # Check dmesg for driver errors
+        dmesg | grep -i -E "mgbe|nvethernet|ethernet|ether_probe" | tail -20
     fi
+}
+
+wait_for_emmc() {
+    echo "Waiting for eMMC (mmcblk0)..."
+    count=0
+    while [ ! -b /dev/mmcblk0 ] && [ $count -lt 50 ]; do
+        sleep 0.1
+        count=$((count + 1))
+    done
+
+    if [ ! -b /dev/mmcblk0 ]; then
+        echo "ERROR: eMMC not found after 5 seconds"
+        return 1
+    fi
+
+    echo "eMMC detected: $(cat /sys/block/mmcblk0/device/name 2>/dev/null || echo 'unknown')"
+
+    # Wait for partition
+    echo "Waiting for ${EMMC_PART}..."
+    count=0
+    while [ ! -b "$EMMC_PART" ] && [ $count -lt 30 ]; do
+        sleep 0.1
+        count=$((count + 1))
+    done
+
+    if [ ! -b "$EMMC_PART" ]; then
+        echo "ERROR: ${EMMC_PART} not found"
+        echo "Available partitions:"
+        ls -la /dev/mmcblk0* 2>/dev/null
+        return 1
+    fi
+
+    return 0
+}
+
+mount_emmc_partition() {
+    echo "Mounting ${EMMC_PART}..."
+    mkdir -p "$EMMC_MNT"
+    if ! mount -o rw "$EMMC_PART" "$EMMC_MNT"; then
+        echo "ERROR: Failed to mount ${EMMC_PART}"
+        return 1
+    fi
+    return 0
+}
+
+find_and_mount_rootfs() {
+    ROOTFS_PATH="${EMMC_MNT}/${ROOTFS_IMAGE}"
+    echo "Looking for rootfs image: ${ROOTFS_PATH}"
+
+    if [ ! -f "$ROOTFS_PATH" ]; then
+        echo "ERROR: Rootfs image not found: ${ROOTFS_PATH}"
+        echo "Files in ${EMMC_MNT}:"
+        ls -la "$EMMC_MNT"/*.ext4 2>/dev/null || ls -la "$EMMC_MNT" | head -n 20
+        echo ""
+        echo "Hint: Upload the rootfs image to ${EMMC_PART} as ${ROOTFS_IMAGE}"
+        return 1
+    fi
+
+    ROOTFS_SIZE=$(ls -lh "$ROOTFS_PATH" | awk '{print $5}')
+    echo "Found rootfs image: ${ROOTFS_IMAGE} (${ROOTFS_SIZE})"
+
+    # Set up loop device and mount rootfs
+    echo "Setting up loop device..."
+    mkdir -p "$ROOTFS_MNT"
+
+    LOOP_DEV=$(losetup -f)
+    if [ -z "$LOOP_DEV" ]; then
+        echo "ERROR: No free loop device"
+        return 1
+    fi
+
+    if ! losetup "$LOOP_DEV" "$ROOTFS_PATH"; then
+        echo "ERROR: Failed to set up loop device"
+        return 1
+    fi
+
+    echo "Loop device: ${LOOP_DEV}"
+
+    echo "Mounting rootfs..."
+    if ! mount -o rw "$LOOP_DEV" "$ROOTFS_MNT"; then
+        echo "ERROR: Failed to mount rootfs image"
+        losetup -d "$LOOP_DEV"
+        return 1
+    fi
+
+    return 0
+}
+
+verify_init() {
+    # Verify the rootfs has /sbin/init
+    INIT_PATH="/sbin/init"
+    INIT_CHECK="${ROOTFS_MNT}${INIT_PATH}"
+
+    # If it's a symlink, resolve it relative to the rootfs
+    if [ -L "$INIT_CHECK" ]; then
+        LINK_TARGET=$(readlink "$INIT_CHECK")
+        case "$LINK_TARGET" in
+            /*) INIT_CHECK="${ROOTFS_MNT}${LINK_TARGET}" ;;
+            *)  INIT_CHECK="${ROOTFS_MNT}/sbin/${LINK_TARGET}" ;;
+        esac
+    fi
+
+    if [ ! -x "$INIT_CHECK" ]; then
+        echo "WARNING: /sbin/init not found or not executable"
+        echo "Contents of ${ROOTFS_MNT}/sbin:"
+        ls -la "${ROOTFS_MNT}/sbin/" | head -n 10
+
+        if [ -x "${ROOTFS_MNT}/init" ]; then
+            echo "Found /init, will use that instead"
+            INIT_PATH="/init"
+        else
+            echo "ERROR: No init found in rootfs"
+            return 1
+        fi
+    fi
+
+    echo "Init verified: ${INIT_PATH}"
+    return 0
+}
+
+do_switch_root() {
+    echo ""
+    echo "=== Switching to rootfs ==="
+    echo "Image: ${ROOTFS_IMAGE}"
+    echo "Init:  ${INIT_PATH}"
+    echo ""
+
+    # Move virtual filesystems to new root
+    mount --move /sys  "${ROOTFS_MNT}/sys"  2>/dev/null || mount -t sysfs sysfs "${ROOTFS_MNT}/sys"
+    mount --move /proc "${ROOTFS_MNT}/proc" 2>/dev/null || mount -t proc proc "${ROOTFS_MNT}/proc"
+    mount --move /dev  "${ROOTFS_MNT}/dev"  2>/dev/null || mount -t devtmpfs devtmpfs "${ROOTFS_MNT}/dev"
+
+    exec switch_root "$ROOTFS_MNT" "$INIT_PATH"
+
+    # If switch_root fails
+    echo "ERROR: switch_root failed!"
+    return 1
+}
+
+drop_to_shell() {
+    echo "Dropping to shell for debugging..."
+    echo "Ethernet may be available (check 'ip addr' for DHCP address)"
+    exec setsid cttyhack /bin/sh
+}
+
+#############################################################################
+# Main
+#############################################################################
+
+echo "=== seL4 VM Init ==="
+
+# Phase 1: Essential setup
+mount_essential_filesystems
+
+echo "Kernel: $(uname -r)"
+echo "Cmdline: $(cat /proc/cmdline)"
+
+parse_cmdline
+
+# Phase 2: Load essential drivers
+if [ -d /lib/modules ]; then
+    # PMC IRQ domain MUST load first - GPIO driver defers probe until PMC IRQ domain exists
+    # This enables hierarchical IRQ mode with proper hwirq translation (DT GPIO number to linear)
+    echo "Loading pmc-irq-domain (for GPIO hierarchical IRQ mode)..."
+    modprobe pmc-irq-domain 2>/dev/null || echo "NOTE: pmc-irq-domain not found (OK if no PMC node in DT)"
+
+    # BPMP driver - other drivers depend on it for clocks/resets
+    echo "Loading tegra_bpmp (BPMP IPC driver)..."
+    modprobe tegra_bpmp 2>/dev/null || echo "WARNING: tegra_bpmp load failed"
 fi
 
-# Move virtual filesystems to new root
-mount --move /sys  "${ROOTFS_MNT}/sys"  2>/dev/null || mount -t sysfs sysfs "${ROOTFS_MNT}/sys"
-mount --move /proc "${ROOTFS_MNT}/proc" 2>/dev/null || mount -t proc proc "${ROOTFS_MNT}/proc"
-mount --move /dev  "${ROOTFS_MNT}/dev"  2>/dev/null || mount -t devtmpfs devtmpfs "${ROOTFS_MNT}/dev"
+# Phase 3: Early ethernet - before anything else that could fail
+# This allows SSH access for debugging even if rootfs mount fails
+init_ethernet
 
-# switch_root to the new rootfs
-# Note: switch_root will:
-# - Delete everything in the initramfs
-# - chroot to the new root
-# - Execute the specified init
-exec switch_root "$ROOTFS_MNT" "$INIT_PATH"
+# Check if we should just drop to shell (for debugging)
+if [ -n "$DROP_TO_SHELL" ]; then
+    echo "'shell' requested on cmdline"
+    drop_to_shell
+fi
 
-# If switch_root fails, drop to shell
-echo "ERROR: switch_root failed!"
-exec setsid cttyhack /bin/sh
+# Phase 4: Storage setup
+if ! wait_for_emmc; then
+    drop_to_shell
+fi
+
+if ! mount_emmc_partition; then
+    drop_to_shell
+fi
+
+if ! find_and_mount_rootfs; then
+    drop_to_shell
+fi
+
+if ! verify_init; then
+    drop_to_shell
+fi
+
+# Phase 5: Switch to real rootfs
+do_switch_root
+
+# Should never reach here
+drop_to_shell

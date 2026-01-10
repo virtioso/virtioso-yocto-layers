@@ -25,8 +25,12 @@ ROOTFS_POSTPROCESS_COMMAND:append = " create_console_devices;"
 # Avoid circular dependencies
 EXTRA_IMAGEDEPENDS = ""
 
-# Just our minimal init and busybox, plus Ethernet modules for Orin AGX
+# Just our minimal init and busybox, plus essential modules for Orin AGX
+# tegra-bpmp MUST be loaded first - other drivers depend on it for clocks/resets
+# pmc-irq-domain creates IRQ domain so GPIO driver uses hierarchical mode
 IMAGE_INSTALL = "minimal-init \
+    kernel-module-pmc-irq-domain \
+    nv-kernel-module-tegra-bpmp \
     kernel-module-phy-tegra194-p2u \
     nv-kernel-module-nvethernet \
     nv-kernel-module-nvpps \
