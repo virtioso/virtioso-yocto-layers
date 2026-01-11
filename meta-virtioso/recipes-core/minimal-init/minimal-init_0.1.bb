@@ -5,10 +5,10 @@ LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 
-SRC_URI = "file://init"
+SRC_URI = "file://init file://default.script"
 
-# busybox provides: sh, mount, mknod, cat, uname, setsid, cttyhack, losetup, switch_root
-# Ensure busybox is configured with CONFIG_LOSETUP and CONFIG_SWITCH_ROOT
+# busybox provides: sh, mount, mknod, cat, uname, setsid, cttyhack, losetup, switch_root, udhcpc
+# Ensure busybox is configured with CONFIG_LOSETUP, CONFIG_SWITCH_ROOT, CONFIG_UDHCPC
 RDEPENDS:${PN} = "busybox"
 
 do_install() {
@@ -22,6 +22,11 @@ do_install() {
     install -d ${D}/run
     install -d ${D}/mnt/emmc
     install -d ${D}/mnt/rootfs
+    install -d ${D}/etc
+
+    # Install udhcpc default script
+    install -d ${D}/etc/udhcpc.d
+    install -m 0755 ${UNPACKDIR}/default.script ${D}/etc/udhcpc.d/default.script
 }
 
-FILES:${PN} = "/init /proc /sys /dev /tmp /run /mnt"
+FILES:${PN} = "/init /proc /sys /dev /tmp /run /mnt /etc"

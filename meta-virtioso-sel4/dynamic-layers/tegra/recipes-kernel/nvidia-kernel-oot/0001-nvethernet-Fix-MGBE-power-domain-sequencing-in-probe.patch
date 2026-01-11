@@ -1,0 +1,65 @@
+From 62104d1cb42b7fff03c1bc65455e0358a306ca8d Mon Sep 17 00:00:00 2001
+From: Hannu Lyytinen <hannu.lyytinen@unikie.com>
+Date: Wed, 7 Jan 2026 21:36:54 +0200
+Subject: [PATCH] nvethernet: Fix MGBE power domain sequencing in probe
+
+The MGBE ethernet driver accesses MAC registers during probe() before
+enabling runtime PM, causing the first hardware access to hang when the
+MGBE power domain is not already powered on.
+
+Signed-off-by: Hannu Lyytinen <hannu.lyytinen@unikie.com>
+---
+ .../ethernet/nvidia/nvethernet/ether_linux.c  | 25 ++++++++++++++++++-
+ 1 file changed, 24 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/nvidia/nvethernet/ether_linux.c b/drivers/net/ethernet/nvidia/nvethernet/ether_linux.c
+index 2048d2c8..4f354b0a 100644
+--- a/drivers/net/ethernet/nvidia/nvethernet/ether_linux.c
++++ b/drivers/net/ethernet/nvidia/nvethernet/ether_linux.c
+@@ -6501,6 +6501,19 @@ static int ether_probe(struct platform_device *pdev)
+ 		}
+ 	}
+ 
++	/*
++	 * Enable runtime PM and power on the MGBE domain BEFORE any
++	 * hardware access. Without this, the first MAC register access
++	 * will hang if the power domain is not already on.
++	 */
++	pm_runtime_enable(&pdev->dev);
++	ret = pm_runtime_get_sync(&pdev->dev);
++	if (ret < 0) {
++		dev_err(&pdev->dev, "failed to power on MGBE domain: %d\n", ret);
++		pm_runtime_disable(&pdev->dev);
++		return ret;
++	}
++
+ 	osi_core = osi_get_core();
+ 	if (osi_core == NULL) {
+ 		return -ENOMEM;
+@@ -6689,8 +6702,12 @@ static int ether_probe(struct platform_device *pdev)
+ 	raw_spin_lock_init(&pdata->txts_lock);
+ 	init_filter_values(pdata);
+ 
++	/*
++	 * For MGBE, pm_runtime was already enabled at start of probe.
++	 * Now allow the domain to idle since probe-time HW access is done.
++	 */
+ 	if (osi_core->mac == OSI_MAC_HW_MGBE)
+-		pm_runtime_enable(pdata->dev);
++		pm_runtime_put(pdata->dev);
+ 
+ 	/* Disable Clocks */
+ 	ether_disable_clks(pdata);
+@@ -6751,6 +6768,12 @@ err_init_res:
+ err_parse_dt:
+ err_core_ops:
+ err_dma_ops:
++	/* For MGBE, we enabled runtime PM early - clean it up on error */
++	if (mac == OSI_MAC_HW_MGBE) {
++		pm_runtime_put_noidle(&pdev->dev);
++		pm_runtime_disable(&pdev->dev);
++	}
++
+ err_kzalloc:
+ 	ether_stop_ivc(pdata);
+ 	free_netdev(ndev);

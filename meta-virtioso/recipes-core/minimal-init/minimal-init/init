@@ -299,6 +299,10 @@ init_ethernet() {
         # Show total GPIO bank interrupt counts
         echo "All GIC-ARM interrupts:"
         cat /proc/interrupts 2>/dev/null | grep -E "GIC-.*ARM" | head -n 20
+        # Show MGBE/Ethernet interrupts (IRQs 416-423)
+        echo "MGBE/Ethernet interrupts (IRQs 416-423, eth0):"
+        cat /proc/interrupts 2>/dev/null | head -n 1  # header
+        cat /proc/interrupts 2>/dev/null | grep -E "41[6-9]:|42[0-3]:|eth0|eno1" || echo "  none found"
         # Check for phylink messages in dmesg
         echo "Recent PHY/link dmesg:"
         dmesg | grep -i "phylink\|link state\|attached\|phy:" | tail -n 10
@@ -476,7 +480,159 @@ init_ethernet() {
             ip addr add 192.168.101.112/24 dev eth0
         fi
         ip link show eth0
-        echo "Ethernet ready (DHCP in background)"
+        # Always set a static IP for debugging (in addition to DHCP attempt)
+        echo "Setting static IP 192.168.101.113/24 for debugging..."
+        ip addr add 192.168.101.113/24 dev eth0 2>/dev/null || true
+        # Show network interface statistics
+        echo "=== Network interface stats ==="
+        cat /sys/class/net/eth0/statistics/tx_packets 2>/dev/null && echo " tx_packets"
+        cat /sys/class/net/eth0/statistics/rx_packets 2>/dev/null && echo " rx_packets"
+        cat /sys/class/net/eth0/statistics/tx_bytes 2>/dev/null && echo " tx_bytes"
+        cat /sys/class/net/eth0/statistics/rx_bytes 2>/dev/null && echo " rx_bytes"
+        cat /sys/class/net/eth0/statistics/tx_errors 2>/dev/null && echo " tx_errors"
+        cat /sys/class/net/eth0/statistics/rx_errors 2>/dev/null && echo " rx_errors"
+        echo "=== End network stats ==="
+
+        # MGBE ASID register debug - verify SID writes happened
+        # Expected values if writes worked:
+        #   ASID0 (0x6808400) = 0x06060606 (MGBE_SID_VAL1(0x6))
+        #   ASID1 (0x6808404) = 0x06060606 (MGBE_SID_VAL1(0x6))
+        #   ASID2 (0x6808408) = 0x00000606 (MGBE_SID_VAL2(0x6))
+        echo "=== MGBE ASID/SID register debug ==="
+        # Try devmem first, then devmem2 (busybox)
+        DEVMEM=""
+        if command -v devmem >/dev/null 2>&1; then
+            DEVMEM="devmem"
+        elif command -v devmem2 >/dev/null 2>&1; then
+            DEVMEM="devmem2"
+        fi
+        if [ -n "$DEVMEM" ]; then
+            echo "Using $DEVMEM to read registers"
+            echo "Reading ASID registers (MGBE wrapper at 0x6800000):"
+            ASID0=$($DEVMEM 0x6808400 2>/dev/null || echo "FAIL")
+            ASID1=$($DEVMEM 0x6808404 2>/dev/null || echo "FAIL")
+            ASID2=$($DEVMEM 0x6808408 2>/dev/null || echo "FAIL")
+            echo "  ASID0_CTRL (0x6808400): $ASID0 (expect 0x06060606)"
+            echo "  ASID1_CTRL (0x6808404): $ASID1 (expect 0x06060606)"
+            echo "  ASID2_CTRL (0x6808408): $ASID2 (expect 0x00000606)"
+            # Also read some DMA/IRQ related registers
+            echo "Reading MGBE interrupt status registers:"
+            COMMON_IRQ_EN=$($DEVMEM 0x6808704 2>/dev/null || echo "FAIL")
+            COMMON_IRQ_ST=$($DEVMEM 0x6808708 2>/dev/null || echo "FAIL")
+            echo "  COMMON_INTR_ENABLE (0x6808704): $COMMON_IRQ_EN"
+            echo "  COMMON_INTR_STATUS (0x6808708): $COMMON_IRQ_ST"
+            # Read VIRT_INTR_APB_CHX_CNTRL registers
+            # Driver writes to osi_core->base + 0x8200 = 0x6810000 + 0x8200 = 0x6818200
+            # But registers may be at hv_base + 0x8200 = 0x6800000 + 0x8200 = 0x6808200
+            echo "Reading virtual interrupt control registers (HV base + 0x8200):"
+            for ch in 0 1 2 3 4 5 6 7 8 9; do
+                ADDR=$((0x6808200 + ch*4))
+                ADDR_HEX=$(printf "0x%x" $ADDR)
+                VAL=$($DEVMEM $ADDR_HEX 2>/dev/null || echo "FAIL")
+                echo "  VIRT_INTR_APB_CH${ch}_CNTRL (HV:$ADDR_HEX): $VAL"
+            done
+            echo "Reading virtual interrupt control registers (MAC base + 0x8200):"
+            for ch in 0 1 2 3 4 5 6 7 8 9; do
+                ADDR=$((0x6818200 + ch*4))
+                ADDR_HEX=$(printf "0x%x" $ADDR)
+                VAL=$($DEVMEM $ADDR_HEX 2>/dev/null || echo "FAIL")
+                echo "  VIRT_INTR_APB_CH${ch}_CNTRL (MAC:$ADDR_HEX): $VAL"
+            done
+            # Read DMA channel status and interrupt enable registers
+            # DMA_CHx_STATUS = MAC_BASE + 0x3160 + (x * 0x80)
+            # DMA_CHx_IER (Interrupt Enable) = MAC_BASE + 0x3138 + (x * 0x80)
+            echo "Reading DMA channel registers (MAC base 0x6810000):"
+            for ch in 0 1 2 3 4; do
+                # DMA_CHX_STATUS = 0x3160, DMA_CHX_IER = 0x3138
+                # DMA_CHX_TX_CTRL = 0x3104, DMA_CHX_RX_CTRL = 0x3108
+                STATUS_OFF=$((0x3160 + ch * 0x80))
+                IER_OFF=$((0x3138 + ch * 0x80))
+                TX_CTRL_OFF=$((0x3104 + ch * 0x80))
+                RX_CTRL_OFF=$((0x3108 + ch * 0x80))
+                STATUS_ADDR=$((0x6810000 + STATUS_OFF))
+                IER_ADDR=$((0x6810000 + IER_OFF))
+                TX_CTRL_ADDR=$((0x6810000 + TX_CTRL_OFF))
+                RX_CTRL_ADDR=$((0x6810000 + RX_CTRL_OFF))
+                STATUS_HEX=$(printf "0x%x" $STATUS_ADDR)
+                IER_HEX=$(printf "0x%x" $IER_ADDR)
+                TX_CTRL_HEX=$(printf "0x%x" $TX_CTRL_ADDR)
+                RX_CTRL_HEX=$(printf "0x%x" $RX_CTRL_ADDR)
+                STATUS_VAL=$($DEVMEM $STATUS_HEX 2>/dev/null || echo "FAIL")
+                IER_VAL=$($DEVMEM $IER_HEX 2>/dev/null || echo "FAIL")
+                TX_CTRL_VAL=$($DEVMEM $TX_CTRL_HEX 2>/dev/null || echo "FAIL")
+                RX_CTRL_VAL=$($DEVMEM $RX_CTRL_HEX 2>/dev/null || echo "FAIL")
+                # TX_CTRL bit 0 = ST (Start Transmit), RX_CTRL bit 0 = SR (Start Receive)
+                echo "  CH$ch: STATUS=$STATUS_VAL IER=$IER_VAL TX_CTRL=$TX_CTRL_VAL RX_CTRL=$RX_CTRL_VAL"
+            done
+            # Read DMA descriptor list base addresses (first 2 channels)
+            echo "Reading DMA descriptor list addresses (CH0,CH1):"
+            for ch in 0 1; do
+                # TXDESC_LIST_ADDR_HI = 0x3110, _LO = 0x3114
+                # RXDESC_LIST_ADDR_HI = 0x3118, _LO = 0x311C
+                TX_HI_OFF=$((0x3110 + ch * 0x80))
+                TX_LO_OFF=$((0x3114 + ch * 0x80))
+                RX_HI_OFF=$((0x3118 + ch * 0x80))
+                RX_LO_OFF=$((0x311C + ch * 0x80))
+                TX_HI=$($DEVMEM $(printf "0x%x" $((0x6810000 + TX_HI_OFF))) 2>/dev/null || echo "FAIL")
+                TX_LO=$($DEVMEM $(printf "0x%x" $((0x6810000 + TX_LO_OFF))) 2>/dev/null || echo "FAIL")
+                RX_HI=$($DEVMEM $(printf "0x%x" $((0x6810000 + RX_HI_OFF))) 2>/dev/null || echo "FAIL")
+                RX_LO=$($DEVMEM $(printf "0x%x" $((0x6810000 + RX_LO_OFF))) 2>/dev/null || echo "FAIL")
+                echo "  CH$ch: TX_DESC_HI=$TX_HI LO=$TX_LO, RX_DESC_HI=$RX_HI LO=$RX_LO"
+            done
+            # Read MAC interrupt status and enable
+            echo "Reading MAC interrupt registers:"
+            MAC_ISR=$($DEVMEM 0x68100b0 2>/dev/null || echo "FAIL")
+            MAC_IER=$($DEVMEM 0x68100b4 2>/dev/null || echo "FAIL")
+            echo "  MAC_ISR (0x68100b0): $MAC_ISR"
+            echo "  MAC_IER (0x68100b4): $MAC_IER"
+            # Read wrapper interrupt registers
+            echo "Reading wrapper interrupt registers:"
+            WRAP_INTR_EN=$($DEVMEM 0x6808704 2>/dev/null || echo "FAIL")
+            WRAP_INTR_ST=$($DEVMEM 0x6808708 2>/dev/null || echo "FAIL")
+            echo "  COMMON_INTR_ENABLE (0x6808704): $WRAP_INTR_EN"
+            echo "  COMMON_INTR_STATUS (0x6808708): $WRAP_INTR_ST"
+            # Read UEFI-style VIRT_INTR registers at 0x8600 offset (8-byte stride)
+            # UEFI uses: MGBE_VIRT_INTR_CHX_CNTRL(x) = 0x8600 + (x * 8)
+            echo "Reading UEFI-style virtual interrupt registers (MAC base + 0x8600):"
+            for ch in 0 1 2 3 4 5 6 7 8 9; do
+                CNTRL_ADDR=$((0x6818600 + ch*8))
+                STATUS_ADDR=$((0x6818604 + ch*8))
+                CNTRL_HEX=$(printf "0x%x" $CNTRL_ADDR)
+                STATUS_HEX=$(printf "0x%x" $STATUS_ADDR)
+                CNTRL_VAL=$($DEVMEM $CNTRL_HEX 2>/dev/null || echo "FAIL")
+                STATUS_VAL=$($DEVMEM $STATUS_HEX 2>/dev/null || echo "FAIL")
+                echo "  CH$ch: CNTRL=$CNTRL_VAL STATUS=$STATUS_VAL"
+            done
+        else
+            echo "devmem/devmem2 not available - cannot read ASID registers"
+            echo "Available busybox applets:"
+            busybox --list 2>/dev/null | grep -i mem || echo "(none with 'mem')"
+        fi
+        # Check SMMU status - is it blocking MGBE DMA?
+        # SMMU niso1 (for MGBE) at 0x12000000
+        echo "Reading SMMU registers (niso1 at 0x12000000):"
+        if [ -n "$DEVMEM" ]; then
+            # CR0 at offset 0x20 - bit 0 = SMMU enable
+            SMMU_CR0=$($DEVMEM 0x12000020 2>/dev/null || echo "FAIL")
+            # CR1 at offset 0x24
+            SMMU_CR1=$($DEVMEM 0x12000024 2>/dev/null || echo "FAIL")
+            # CR2 at offset 0x28
+            SMMU_CR2=$($DEVMEM 0x12000028 2>/dev/null || echo "FAIL")
+            # GBPA at offset 0x44 - global bypass attributes
+            SMMU_GBPA=$($DEVMEM 0x12000044 2>/dev/null || echo "FAIL")
+            # IDR0 at offset 0x00 - identification
+            SMMU_IDR0=$($DEVMEM 0x12000000 2>/dev/null || echo "FAIL")
+            echo "  SMMU_IDR0 (0x12000000): $SMMU_IDR0"
+            echo "  SMMU_CR0 (0x12000020): $SMMU_CR0 (bit0=enable)"
+            echo "  SMMU_CR1 (0x12000024): $SMMU_CR1"
+            echo "  SMMU_CR2 (0x12000028): $SMMU_CR2"
+            echo "  SMMU_GBPA (0x12000044): $SMMU_GBPA (global bypass)"
+        else
+            echo "  devmem2 not available for SMMU check"
+        fi
+        echo "=== End MGBE ASID debug ==="
+        ip addr show eth0
+        echo "Ethernet ready (DHCP in background, static IP 192.168.101.113)"
     else
         echo "WARNING: eth0 not found after 5 seconds"
         # Check dmesg for driver errors

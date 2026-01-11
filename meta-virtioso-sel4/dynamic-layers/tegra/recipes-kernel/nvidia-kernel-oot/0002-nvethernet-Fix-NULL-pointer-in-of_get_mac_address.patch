@@ -1,0 +1,51 @@
+From: Claude Code <noreply@anthropic.com>
+Date: Wed, 8 Jan 2026 00:00:00 +0000
+Subject: [PATCH] nvethernet: Fix NULL pointer in of_get_mac_address call
+
+The ether_get_mac_address() function declared a NULL pointer 'addr' and
+passed it to of_get_mac_address(), which attempts to write the MAC
+address to that location. This causes undefined behavior - either memory
+corruption or failure to retrieve the MAC address.
+
+The fix uses the already-declared mac_addr[ETH_ALEN] buffer instead,
+which was the apparent original intent.
+
+This fixes ethernet initialization failures ("jam") on Orin AGX when
+running as a VM guest under seL4.
+
+Upstream-Status: Pending [NVIDIA L4T bug]
+
+Signed-off-by: Claude Code <noreply@anthropic.com>
+---
+ drivers/net/ethernet/nvidia/nvethernet/ether_linux.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/ethernet/nvidia/nvethernet/ether_linux.c b/drivers/net/ethernet/nvidia/nvethernet/ether_linux.c
+index 4f354b0a..c25a526a 100644
+--- a/drivers/net/ethernet/nvidia/nvethernet/ether_linux.c
++++ b/drivers/net/ethernet/nvidia/nvethernet/ether_linux.c
+@@ -4741,7 +4741,6 @@ static int ether_get_mac_address(struct ether_priv_data *pdata)
+ 	struct net_device *ndev = pdata->ndev;
+ 	struct device_node *np = dev->of_node;
+ 	const char *eth_mac_addr = NULL;
+-	u8 *addr = NULL;
+ 	unsigned char mac_addr[ETH_ALEN] = {0};
+ 	/* Default choesn node property name for MAC address */
+ 	char str_mac_address[ETH_MAC_STR_LEN] = "nvidia,ether-mac";
+@@ -4788,12 +4787,12 @@ static int ether_get_mac_address(struct ether_priv_data *pdata)
+ 		 * upstream driver should have only this call to get
+ 		 * MAC address
+ 		 */
+-		ret = of_get_mac_address(np, addr);
++		ret = of_get_mac_address(np, mac_addr);
+ 		if (ret < 0) {
+ 			dev_err(dev, "No Mac address local DT!\n");
+ 			return ret;
+ 		}
+-		eth_mac_addr = addr;
++		eth_mac_addr = mac_addr;
+ 	}
+
+ 	/* Found a valid mac address */
+--
+2.39.0

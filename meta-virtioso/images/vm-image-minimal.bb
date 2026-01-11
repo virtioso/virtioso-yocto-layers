@@ -28,12 +28,14 @@ EXTRA_IMAGEDEPENDS = ""
 # Just our minimal init and busybox, plus essential modules for Orin AGX
 # tegra-bpmp MUST be loaded first - other drivers depend on it for clocks/resets
 # pmc-irq-domain creates IRQ domain so GPIO driver uses hierarchical mode
+# devmem2 for reading hardware registers for debugging
 IMAGE_INSTALL = "minimal-init \
     kernel-module-pmc-irq-domain \
     nv-kernel-module-tegra-bpmp \
     kernel-module-phy-tegra194-p2u \
     nv-kernel-module-nvethernet \
     nv-kernel-module-nvpps \
+    devmem2 \
 "
 
 # No extra features
