@@ -1,5 +1,6 @@
-SUMMARY = "Bridged Ethernet NFS root initramfs"
-DESCRIPTION = "This image provides bridged Ethernet before NFS root."
+SUMMARY = "Unified initramfs for seL4 VM"
+DESCRIPTION = "This image provides platform-aware boot with NFS primary, eMMC fallback, \
+TAP bridge setup, and platform-specific driver loading."
 
 INITRAMFS_FSTYPES += "cpio.gz.u-boot"
 
@@ -31,3 +32,13 @@ IMAGE_ROOTFS_EXTRA_SPACE = "0"
 # disable runtime dependency on run-postinsts -> update-rc.d
 ROOTFS_BOOTSTRAP_INSTALL = ""
 
+# Device nodes for console - kernel needs /dev/console before running init
+# Create via ROOTFS_POSTPROCESS_COMMAND since IMAGE_DEVICE_TABLES has issues
+create_console_devices() {
+    mkdir -p ${IMAGE_ROOTFS}/dev
+    mknod -m 600 ${IMAGE_ROOTFS}/dev/console c 5 1
+    mknod -m 666 ${IMAGE_ROOTFS}/dev/null c 1 3
+    mknod -m 666 ${IMAGE_ROOTFS}/dev/tty c 5 0
+    mknod -m 666 ${IMAGE_ROOTFS}/dev/ttyAMA0 c 204 64
+}
+ROOTFS_POSTPROCESS_COMMAND:append = " create_console_devices;"
