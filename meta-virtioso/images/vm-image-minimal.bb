@@ -28,6 +28,7 @@ EXTRA_IMAGEDEPENDS = ""
 # Just our minimal init and busybox, plus essential modules for Orin AGX
 # tegra-bpmp MUST be loaded first - other drivers depend on it for clocks/resets
 # pmc-irq-domain creates IRQ domain so GPIO driver uses hierarchical mode
+# hyp-ftrace is built into kernel (CONFIG_SEL4_HYP_FTRACE) for early init
 # devmem2 for reading hardware registers for debugging
 IMAGE_INSTALL = "minimal-init \
     kernel-module-pmc-irq-domain \

@@ -1,0 +1,214 @@
+From: Technology Innovation Institute
+Subject: [PATCH] platform/sel4: Add hypervisor ftrace control driver
+
+Add a built-in driver that provides an interface to control seL4
+kernel ftrace from guest Linux. The driver maps a fixed MMIO region
+and provides hyp_ftrace_arm() and hyp_ftrace_dump() functions.
+
+Uses postcore_initcall to ensure it initializes before complex
+drivers like BPMP, allowing ftrace to capture early boot activity.
+
+Signed-off-by: Technology Innovation Institute
+---
+ drivers/platform/Kconfig           |   2 +
+ drivers/platform/Makefile          |   1 +
+ drivers/platform/sel4/Kconfig      |  14 ++++
+ drivers/platform/sel4/Makefile     |   1 +
+ drivers/platform/sel4/hyp-ftrace.c | 108 +++++++++++++++++++++++++++++
+ include/linux/hyp-ftrace.h         |  22 ++++++
+ 6 files changed, 148 insertions(+)
+ create mode 100644 drivers/platform/sel4/Kconfig
+ create mode 100644 drivers/platform/sel4/Makefile
+ create mode 100644 drivers/platform/sel4/hyp-ftrace.c
+ create mode 100644 include/linux/hyp-ftrace.h
+
+diff --git a/drivers/platform/Kconfig b/drivers/platform/Kconfig
+index 868b20187..9c7fb5432 100644
+--- a/drivers/platform/Kconfig
++++ b/drivers/platform/Kconfig
+@@ -16,3 +16,5 @@ source "drivers/platform/mellanox/Kconfig"
+ source "drivers/platform/olpc/Kconfig"
+ source "drivers/platform/surface/Kconfig"
+ source "drivers/platform/x86/Kconfig"
++
++source "drivers/platform/sel4/Kconfig"
+diff --git a/drivers/platform/Makefile b/drivers/platform/Makefile
+index 4de08ef4e..5c9a2a5f1 100644
+--- a/drivers/platform/Makefile
++++ b/drivers/platform/Makefile
+@@ -10,3 +10,4 @@ obj-$(CONFIG_OLPC_EC)		+= olpc/
+ obj-$(CONFIG_GOLDFISH)		+= goldfish/
+ obj-$(CONFIG_CHROME_PLATFORMS)	+= chrome/
+ obj-$(CONFIG_SURFACE_PLATFORMS)	+= surface/
++obj-$(CONFIG_SEL4_PLATFORM)	+= sel4/
+diff --git a/drivers/platform/sel4/Kconfig b/drivers/platform/sel4/Kconfig
+new file mode 100644
+index 000000000..f8a3b2c12
+--- /dev/null
++++ b/drivers/platform/sel4/Kconfig
+@@ -0,0 +1,14 @@
++# SPDX-License-Identifier: GPL-2.0-only
++
++menuconfig SEL4_PLATFORM
++	bool "seL4 Hypervisor Platform Drivers"
++	help
++	  Drivers for running Linux as a guest under seL4 hypervisor.
++
++if SEL4_PLATFORM
++
++config SEL4_HYP_FTRACE
++	bool "seL4 Hypervisor Ftrace Control"
++	help
++	  Interface to control seL4 kernel ftrace from guest Linux.
++endif
+diff --git a/drivers/platform/sel4/Makefile b/drivers/platform/sel4/Makefile
+new file mode 100644
+index 000000000..a1c33c2a1
+--- /dev/null
++++ b/drivers/platform/sel4/Makefile
+@@ -0,0 +1 @@
++obj-$(CONFIG_SEL4_HYP_FTRACE)	+= hyp-ftrace.o
+diff --git a/drivers/platform/sel4/hyp-ftrace.c b/drivers/platform/sel4/hyp-ftrace.c
+new file mode 100644
+index 000000000..b8c4e5f21
+--- /dev/null
++++ b/drivers/platform/sel4/hyp-ftrace.c
+@@ -0,0 +1,108 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * seL4 Hypervisor Ftrace Control Driver
++ *
++ * Provides interface to arm/dump seL4 kernel ftrace from guest Linux.
++ * The driver maps a memory region that, when written to, causes the VMM
++ * to intercept the access and forward commands to the seL4 kernel.
++ *
++ * Uses postcore_initcall to initialize early, before complex drivers
++ * like BPMP, allowing ftrace to capture early boot activity.
++ *
++ * Copyright 2024, Unikie
++ */
++
++#include <linux/io.h>
++#include <linux/printk.h>
++#include <linux/hyp-ftrace.h>
++
++/* MMIO address configured in seL4 VMM */
++#define HYP_FTRACE_BASE		0x0F010000UL
++#define HYP_FTRACE_SIZE		0x1000
++
++/* Register offsets */
++#define HYP_FTRACE_CMD		0x00
++#define HYP_FTRACE_STATUS	0x04
++
++/* Commands */
++#define CMD_ARM		0x01
++#define CMD_DUMP	0x02
++
++static void __iomem *hyp_ftrace_base;
++static bool hyp_ftrace_available;
++
++/**
++ * hyp_ftrace_arm - Reset seL4 ftrace buffer and enable recording
++ *
++ * Call this to clear the ftrace buffer and start fresh recording.
++ * Typically called at a known point before the activity to trace.
++ */
++void hyp_ftrace_arm(void)
++{
++	if (!hyp_ftrace_available) {
++		pr_debug("hyp_ftrace: not available\n");
++		return;
++	}
++	pr_info("hyp_ftrace: arming\n");
++	writel_relaxed(CMD_ARM, hyp_ftrace_base + HYP_FTRACE_CMD);
++}
++EXPORT_SYMBOL_GPL(hyp_ftrace_arm);
++
++/**
++ * hyp_ftrace_dump - Trigger ftrace buffer dump to UART
++ *
++ * Call this to dump the ftrace buffer contents to the seL4 console.
++ */
++void hyp_ftrace_dump(void)
++{
++	if (!hyp_ftrace_available) {
++		pr_debug("hyp_ftrace: not available\n");
++		return;
++	}
++	pr_info("hyp_ftrace: dumping\n");
++	writel_relaxed(CMD_DUMP, hyp_ftrace_base + HYP_FTRACE_CMD);
++}
++EXPORT_SYMBOL_GPL(hyp_ftrace_dump);
++
++/**
++ * hyp_ftrace_available - Check if hyp_ftrace interface is available
++ */
++bool hyp_ftrace_is_available(void)
++{
++	return hyp_ftrace_available;
++}
++EXPORT_SYMBOL_GPL(hyp_ftrace_is_available);
++
++static int __init hyp_ftrace_init(void)
++{
++	/*
++	 * Try to map the hyp_ftrace MMIO region. If running under seL4
++	 * with hyp_ftrace configured, the VMM will handle accesses.
++	 * If not under seL4, ioremap may fail or accesses will fault.
++	 *
++	 * We use ioremap (not ioremap_np) since the VMM expects normal
++	 * memory-mapped accesses that trigger stage 2 faults.
++	 */
++	hyp_ftrace_base = ioremap(HYP_FTRACE_BASE, HYP_FTRACE_SIZE);
++	if (!hyp_ftrace_base) {
++		pr_info("hyp_ftrace: ioremap failed, not available\n");
++		return 0; /* Not an error - just not running under seL4 */
++	}
++
++	hyp_ftrace_available = true;
++	pr_info("hyp_ftrace: initialized at 0x%lx\n", HYP_FTRACE_BASE);
++
++	/*
++	 * Auto-arm ftrace to capture early boot activity.
++	 * This resets the seL4 ftrace buffer and starts recording.
++	 */
++	hyp_ftrace_arm();
++
++	return 0;
++}
++
++/*
++ * Use postcore_initcall to run early, before device_initcall drivers
++ * like BPMP. This ensures ftrace is armed before interesting activity.
++ */
++postcore_initcall(hyp_ftrace_init);
+diff --git a/include/linux/hyp-ftrace.h b/include/linux/hyp-ftrace.h
+new file mode 100644
+index 000000000..e2b5c8a12
+--- /dev/null
++++ b/include/linux/hyp-ftrace.h
+@@ -0,0 +1,22 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * seL4 Hypervisor Ftrace Control Interface
++ *
++ * Copyright 2024, Unikie
++ */
++
++#ifndef _LINUX_HYP_FTRACE_H
++#define _LINUX_HYP_FTRACE_H
++
++#ifdef CONFIG_SEL4_HYP_FTRACE
++void hyp_ftrace_arm(void);
++void hyp_ftrace_dump(void);
++bool hyp_ftrace_is_available(void);
++#else
++static inline void hyp_ftrace_arm(void) {}
++static inline void hyp_ftrace_dump(void) {}
++static inline bool hyp_ftrace_is_available(void) { return false; }
++#endif
++
++#endif /* _LINUX_HYP_FTRACE_H */
++
+--
+2.30.2
