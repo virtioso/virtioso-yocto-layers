@@ -38,7 +38,7 @@ PACKAGECONFIG:class-target = " \
 "
 
 SRC_URI:remove = "https://download.qemu.org/${BPN}-${PV}.tar.xz"
-QEMU_LOCAL_SRC = "${@os.path.abspath(os.path.join(d.getVar('TOPDIR'), '..', '..', 'sources', 'qemu'))}"
+QEMU_LOCAL_SRC = "${VIRTIOSO_LOCAL_SOURCES_DIR}/${VIRTIOSO_QEMU_REPO_DIR}"
 SRC_URI += "file://${QEMU_LOCAL_SRC};subdir=${BPN}-${PV}"
 
 python () {

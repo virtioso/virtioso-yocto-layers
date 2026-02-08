@@ -5,7 +5,7 @@ SECTION = "kernel"
 LICENSE = "BSD-2-Clause"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=d9916c659cd59cc3dea0299cd895bf0e"
 
-SEL4_KERNEL_SUPPORT_LOCAL_SRC = "${@os.path.abspath(os.path.join(d.getVar('TOPDIR'), '..', '..', 'sources', 'sel4-linux-kernel-support'))}"
+SEL4_KERNEL_SUPPORT_LOCAL_SRC = "${VIRTIOSO_LOCAL_SOURCES_DIR}/sel4-linux-kernel-support"
 SRC_URI = "file://${SEL4_KERNEL_SUPPORT_LOCAL_SRC};subdir=git"
 
 S = "${WORKDIR}/git"
