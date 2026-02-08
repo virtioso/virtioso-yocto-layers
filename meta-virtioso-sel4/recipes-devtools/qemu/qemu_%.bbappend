@@ -39,7 +39,11 @@ PACKAGECONFIG:class-target = " \
 
 SRC_URI:remove = "https://download.qemu.org/${BPN}-${PV}.tar.xz"
 QEMU_LOCAL_SRC = "${VIRTIOSO_LOCAL_SOURCES_DIR}/${VIRTIOSO_QEMU_REPO_DIR}"
-SRC_URI += "file://${QEMU_LOCAL_SRC};subdir=${BPN}-${PV}"
+SRC_URI += "file://${QEMU_LOCAL_SRC}/;subdir=${BPN}-${PV}"
+SRC_URI:remove = "file://fix-strerrorname_np.patch"
+
+# Local directory unpack preserves absolute source path under ${WORKDIR}/${BPN}-${PV}.
+S = "${WORKDIR}/${BPN}-${PV}/${@d.getVar('QEMU_LOCAL_SRC').lstrip('/')}"
 
 python () {
     import os
