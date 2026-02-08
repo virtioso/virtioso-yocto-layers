@@ -38,8 +38,15 @@ PACKAGECONFIG:class-target = " \
 "
 
 SRC_URI:remove = "https://download.qemu.org/${BPN}-${PV}.tar.xz"
-SRC_URI += "gitsm://github.com/virtioso/virtioso-qemu.git;protocol=https;destsuffix=${BPN}-${PV};branch=virtioso/9.2.0"
-SRCREV = "${AUTOREV}"
+QEMU_LOCAL_SRC = "${@os.path.abspath(os.path.join(d.getVar('TOPDIR'), '..', '..', 'sources', 'qemu'))}"
+SRC_URI += "file://${QEMU_LOCAL_SRC};subdir=${BPN}-${PV}"
+
+python () {
+    import os
+    src = d.getVar("QEMU_LOCAL_SRC")
+    if not os.path.isdir(src):
+        bb.fatal("Missing required local source directory: %s" % src)
+}
 
 # Git source doesn't bundle meson subprojects like the tarball does
 # Allow meson to download them during configure

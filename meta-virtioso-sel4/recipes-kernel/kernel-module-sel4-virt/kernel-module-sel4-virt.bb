@@ -5,10 +5,17 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=b234ee4d69f5fce4486a80fdaf4a4263"
 
 inherit module
 
-SRC_URI = "git://github.com/tiiuae/kmod-sel4-virt.git;protocol=https;branch=main"
-SRCREV = "${AUTOREV}"
+SEL4_VIRT_LOCAL_SRC = "${@os.path.abspath(os.path.join(d.getVar('TOPDIR'), '..', '..', 'sources', 'kmod-sel4-virt'))}"
+SRC_URI = "file://${SEL4_VIRT_LOCAL_SRC};subdir=git"
 
 S = "${WORKDIR}/git"
+
+python () {
+    import os
+    src = d.getVar("SEL4_VIRT_LOCAL_SRC")
+    if not os.path.isdir(src):
+        bb.fatal("Missing required local source directory: %s" % src)
+}
 
 EXTRA_OEMAKE += "INSTALL_HDR_PATH=${D}"
 MODULES_INSTALL_TARGET = "modules_install headers_install"
