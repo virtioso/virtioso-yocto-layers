@@ -218,6 +218,12 @@ EOF
 try_emmc_boot() {
     echo "=== Attempting eMMC fallback ==="
 
+    echo "Loading sel4_virt before eMMC rootfs mount..."
+    if ! modprobe sel4_virt; then
+        echo "Failed to load sel4_virt"
+        return 1
+    fi
+
     # Wait for eMMC
     echo "Waiting for eMMC (mmcblk0)..."
     count=0
