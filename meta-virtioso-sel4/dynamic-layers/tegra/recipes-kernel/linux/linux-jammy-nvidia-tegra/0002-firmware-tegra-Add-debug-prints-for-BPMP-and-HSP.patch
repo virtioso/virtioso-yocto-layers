@@ -116,9 +116,6 @@ index 1c01b894ea28..6ba05e166b1a 100644
  	size_t size;
  	int err;
 
-+	/* Arm seL4 ftrace to capture BPMP initialization */
-+	hyp_ftrace_arm();
-+
  	bpmp = devm_kzalloc(&pdev->dev, sizeof(*bpmp), GFP_KERNEL);
  	if (!bpmp)
  		return -ENOMEM;
@@ -144,4 +141,3 @@ index b781c01a0c5c..62342e1f002b 100644
  	}
 --
 2.43.0
-
