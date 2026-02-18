@@ -15,7 +15,7 @@
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 # Configurable defaults (can override via cmdline)
-ROOTFS_IMAGE="${ROOTFS_IMAGE:-vm-image-driver-vm-jetson-agx-orin.rootfs.ext4}"
+ROOTFS_IMAGE="${ROOTFS_IMAGE:-var/lib/virtioso-vm-images/vm-image-driver-vm-jetson-agx-orin.rootfs.ext4}"
 EMMC_PART="/dev/mmcblk0p1"
 DROP_TO_SHELL=""
 PLATFORM="qemu"
