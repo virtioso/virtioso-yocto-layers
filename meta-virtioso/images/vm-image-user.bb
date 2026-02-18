@@ -11,6 +11,7 @@ IMAGE_ROOTFS_EXTRA_SPACE = "131072"
 
 IMAGE_FEATURES += " \
     benchmark \
+    trace \
     "
 
 export IMAGE_BASENAME = "vm-image-user"
@@ -29,4 +30,3 @@ EOF
 ROOTFS_POSTPROCESS_COMMAND:append = " \
 	add_qemu_share; \
 	"
-

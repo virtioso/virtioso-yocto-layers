@@ -21,6 +21,11 @@ FEATURE_PACKAGES_benchmark = " \
     tii-benchmark \
 "
 
+FEATURE_PACKAGES_trace = " \
+    devmem2 \
+    hyp-ftrace-tools \
+"
+
 GUI_BENCHMARK_TOOLS = " \
     x11perf \
     xrestop \

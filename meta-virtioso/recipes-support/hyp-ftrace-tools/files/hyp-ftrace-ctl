@@ -1,0 +1,49 @@
+#!/bin/sh
+
+REG_ADDR="0x0F010000"
+
+if [ "$#" -ne 1 ]; then
+    echo "usage: hyp-ftrace-ctl {arm|dump}"
+    exit 2
+fi
+
+case "$1" in
+    arm)
+        ACTION="ARM"
+        VALUE="0x1"
+        ;;
+    dump)
+        ACTION="DUMP"
+        VALUE="0x2"
+        ;;
+    *)
+        echo "usage: hyp-ftrace-ctl {arm|dump}"
+        exit 2
+        ;;
+esac
+
+run_write() {
+    TOOL_NAME="$1"
+    shift
+    if "$@" >/dev/null 2>&1; then
+        echo "AUTOPILOT_INFO: HYP_FTRACE_${ACTION}_OK via ${TOOL_NAME}"
+        return 0
+    fi
+    return 1
+}
+
+if command -v busybox >/dev/null 2>&1; then
+    run_write "busybox-devmem" busybox devmem "$REG_ADDR" 32 "$VALUE" && exit 0
+    run_write "busybox-devmem2" busybox devmem2 "$REG_ADDR" w "$VALUE" && exit 0
+fi
+
+if command -v devmem2 >/dev/null 2>&1; then
+    run_write "devmem2" devmem2 "$REG_ADDR" w "$VALUE" && exit 0
+fi
+
+if command -v devmem >/dev/null 2>&1; then
+    run_write "devmem" devmem "$REG_ADDR" 32 "$VALUE" && exit 0
+fi
+
+echo "AUTOPILOT_FAIL: HYP_FTRACE_${ACTION}_CMD_FAILED (no usable devmem tool)"
+exit 1
