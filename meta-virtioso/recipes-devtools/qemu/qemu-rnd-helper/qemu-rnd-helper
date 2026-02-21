@@ -9,6 +9,58 @@ EOF
     exit 0
 fi
 
+# Hyp-ftrace guest stream bridge (best-effort, no-op if devmem is unavailable)
+HYP_FTRACE_BASE=0x0F010000
+HYP_FTRACE_CMD=$((HYP_FTRACE_BASE + 0x00))
+VIO_TRACE_GUEST_REG_SOURCE_ID=$((HYP_FTRACE_BASE + 0x18))
+VIO_TRACE_GUEST_REG_FLAGS=$((HYP_FTRACE_BASE + 0x1C))
+VIO_TRACE_GUEST_REG_ARG0=$((HYP_FTRACE_BASE + 0x20))
+VIO_TRACE_GUEST_REG_ARG1=$((HYP_FTRACE_BASE + 0x24))
+VIO_TRACE_GUEST_REG_ARG2=$((HYP_FTRACE_BASE + 0x28))
+VIO_TRACE_GUEST_REG_ARG3=$((HYP_FTRACE_BASE + 0x2C))
+CMD_VIO_TRACE_GUEST_EMIT=0x20
+
+# VIO trace source IDs reserved for nested VM1 lifecycle bridge
+VIO_TRACE_SRC_VM1_LAUNCH=12545
+VIO_TRACE_SRC_VM1_HEARTBEAT=12546
+VIO_TRACE_SRC_VM1_EXIT=12547
+
+vio_trace_write32() {
+    addr="$1"
+    value="$2"
+
+    if command -v busybox >/dev/null 2>&1; then
+        busybox devmem "$addr" 32 "$value" >/dev/null 2>&1 && return 0
+        busybox devmem2 "$addr" w "$value" >/dev/null 2>&1 && return 0
+    fi
+    if command -v devmem2 >/dev/null 2>&1; then
+        devmem2 "$addr" w "$value" >/dev/null 2>&1 && return 0
+    fi
+    if command -v devmem >/dev/null 2>&1; then
+        devmem "$addr" 32 "$value" >/dev/null 2>&1 && return 0
+    fi
+    return 1
+}
+
+vio_trace_guest_emit() {
+    source_id="$1"
+    flags="${2:-0}"
+    arg0="${3:-0}"
+    arg1="${4:-0}"
+    arg2="${5:-0}"
+    arg3="${6:-0}"
+
+    vio_trace_write32 "$VIO_TRACE_GUEST_REG_SOURCE_ID" "$source_id" || return 0
+    vio_trace_write32 "$VIO_TRACE_GUEST_REG_FLAGS" "$flags" || return 0
+    vio_trace_write32 "$VIO_TRACE_GUEST_REG_ARG0" "$arg0" || return 0
+    vio_trace_write32 "$VIO_TRACE_GUEST_REG_ARG1" "$arg1" || return 0
+    vio_trace_write32 "$VIO_TRACE_GUEST_REG_ARG2" "$arg2" || return 0
+    vio_trace_write32 "$VIO_TRACE_GUEST_REG_ARG3" "$arg3" || return 0
+    vio_trace_write32 "$HYP_FTRACE_CMD" "$CMD_VIO_TRACE_GUEST_EMIT" || return 0
+
+    return 0
+}
+
 if test "x${VMID}" = "x"; then
     VMID=1
     echo "VMID not specified, defaulting to ${VMID}"
@@ -103,7 +155,19 @@ case "${ROOTFS_STORAGE}" in
         ;;
 esac
 
-exec /usr/bin/qemu-system-aarch64 \
+heartbeat_pid=""
+qemu_pid=""
+
+cleanup_bridge() {
+    if [ -n "$heartbeat_pid" ]; then
+        kill "$heartbeat_pid" >/dev/null 2>&1 || true
+        wait "$heartbeat_pid" >/dev/null 2>&1 || true
+        heartbeat_pid=""
+    fi
+}
+trap cleanup_bridge EXIT INT TERM
+
+/usr/bin/qemu-system-aarch64 \
     `# minicom already uses ^A, change monitor escape to ^T` \
     -echr 0x14 \
     `# do not touch these` \
@@ -129,4 +193,26 @@ exec /usr/bin/qemu-system-aarch64 \
     `# extra options` \
     ${QEMU_EXTRA_ARGS} \
     ${QEMU_APPEND_BOOTARGS:+-append "${QEMU_APPEND_BOOTARGS}"} \
-    `# that's it!`
+    `# that's it!` &
+qemu_pid="$!"
+
+vio_trace_guest_emit "$VIO_TRACE_SRC_VM1_LAUNCH" 0 "$VMID" 0 0 0
+
+if [ "${VIO_TRACE_VM1_BRIDGE:-1}" = "1" ]; then
+    (
+        seq=0
+        hb_sec="${VIO_TRACE_VM1_HEARTBEAT_SEC:-2}"
+        while kill -0 "$qemu_pid" >/dev/null 2>&1; do
+            sleep "$hb_sec"
+            seq=$((seq + 1))
+            vio_trace_guest_emit "$VIO_TRACE_SRC_VM1_HEARTBEAT" 0 "$VMID" "$seq" 0 0
+        done
+    ) &
+    heartbeat_pid="$!"
+fi
+
+wait "$qemu_pid"
+qemu_rc="$?"
+cleanup_bridge
+vio_trace_guest_emit "$VIO_TRACE_SRC_VM1_EXIT" 0 "$VMID" "$qemu_rc" 0 0
+exit "$qemu_rc"
