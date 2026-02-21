@@ -24,8 +24,7 @@ mkdir -p "$GUEST_SHARED"
 
 GUEST_GUI_ARGS="${GUEST_GUI_ARGS:--vga none -display none}"
 GUEST_NET_ARGS=""
-# swiotlb args
-GUEST_VIRTIO_ARGS="-global virtio-pci.disable-legacy=on -global virtio-pci.iommu_platform=on"
+GUEST_VIRTIO_ARGS=""
 
 # Additional arguments for net device e.g. ",vhost=yes"
 GUEST_NET_ARGS_APPEND="${GUEST_NET_ARGS_APPEND:-}"
