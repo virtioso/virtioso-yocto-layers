@@ -5,12 +5,10 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=b234ee4d69f5fce4486a80fdaf4a4263"
 
 DEPENDS += " kernel-sel4-support "
 
-inherit module
+inherit module externalsrc
 
-SRC_URI = "git://github.com/tiiuae/kmod-sel4-tracebuffer.git;protocol=https;branch=main"
-SRCREV = "${AUTOREV}"
-
-S = "${WORKDIR}/git"
+EXTERNALSRC = "/home/hlyytine/tii-sel4/sources/kmod-sel4-tracebuffer"
+EXTERNALSRC_BUILD = "${EXTERNALSRC}"
 
 EXTRA_OEMAKE += "EXTRA_CFLAGS=-I${STAGING_DIR_TARGET}${includedir}"
 
