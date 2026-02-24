@@ -167,6 +167,78 @@ cleanup_bridge() {
 }
 trap cleanup_bridge EXIT INT TERM
 
+ensure_sel4_tracebuffer_dev() {
+    major=""
+    if [ -c /dev/sel4_tracebuffer ] && [ -r /dev/sel4_tracebuffer ] && [ -w /dev/sel4_tracebuffer ]; then
+        return 0
+    fi
+
+    minor="$(awk '$2 == "sel4_tracebuffer" { print $1; exit }' /proc/misc 2>/dev/null)"
+    if [ -n "$minor" ]; then
+        if [ ! -e /dev/sel4_tracebuffer ]; then
+            mknod /dev/sel4_tracebuffer c 10 "$minor" >/dev/null 2>&1 || true
+        fi
+        chmod 0660 /dev/sel4_tracebuffer >/dev/null 2>&1 || true
+    fi
+
+    if [ -z "$minor" ]; then
+        major="$(awk '$2 == "sel4_tracebuffer" { print $1; exit }' /proc/devices 2>/dev/null)"
+        if [ -n "$major" ]; then
+            if [ ! -e /dev/sel4_tracebuffer ]; then
+                mknod /dev/sel4_tracebuffer c "$major" 0 >/dev/null 2>&1 || true
+            fi
+            chmod 0660 /dev/sel4_tracebuffer >/dev/null 2>&1 || true
+        fi
+    fi
+
+    [ -c /dev/sel4_tracebuffer ] && [ -r /dev/sel4_tracebuffer ] && [ -w /dev/sel4_tracebuffer ]
+}
+
+tracebuffer_diag_dump() {
+    misc_line="$(awk '$2 == "sel4_tracebuffer" { print; exit }' /proc/misc 2>/dev/null)"
+    if [ -n "$misc_line" ]; then
+        echo "VIO_TRACE_DIAG: /proc/misc sel4_tracebuffer: $misc_line"
+    else
+        echo "VIO_TRACE_DIAG: /proc/misc sel4_tracebuffer: missing"
+    fi
+
+    devices_line="$(awk '$2 == "sel4_tracebuffer" { print; exit }' /proc/devices 2>/dev/null)"
+    if [ -n "$devices_line" ]; then
+        echo "VIO_TRACE_DIAG: /proc/devices sel4_tracebuffer: $devices_line"
+    else
+        echo "VIO_TRACE_DIAG: /proc/devices sel4_tracebuffer: missing"
+    fi
+
+    if [ -e /dev/sel4_tracebuffer ]; then
+        ls -l /dev/sel4_tracebuffer | sed 's/^/VIO_TRACE_DIAG: /'
+    else
+        echo "VIO_TRACE_DIAG: /dev/sel4_tracebuffer missing"
+    fi
+
+    if [ -d /sys/bus/platform/drivers/sel4_tracebuffer ]; then
+        bound="$(ls -1 /sys/bus/platform/drivers/sel4_tracebuffer 2>/dev/null | tr '\n' ' ')"
+        echo "VIO_TRACE_DIAG: driver /sys/bus/platform/drivers/sel4_tracebuffer entries: $bound"
+    else
+        echo "VIO_TRACE_DIAG: driver /sys/bus/platform/drivers/sel4_tracebuffer missing"
+    fi
+}
+
+tracebuffer_wait_s="${SEL4_TRACEBUFFER_WAIT_SEC:-10}"
+while [ "$tracebuffer_wait_s" -gt 0 ]; do
+    if ensure_sel4_tracebuffer_dev; then
+        echo "VIO_TRACE_DIAG: sel4_tracebuffer device ready"
+        tracebuffer_diag_dump
+        break
+    fi
+    sleep 1
+    tracebuffer_wait_s=$((tracebuffer_wait_s - 1))
+done
+
+if [ "$tracebuffer_wait_s" -eq 0 ]; then
+    echo "VIO_TRACE_DIAG: sel4_tracebuffer device unavailable after wait"
+    tracebuffer_diag_dump
+fi
+
 /usr/bin/qemu-system-aarch64 \
     `# minicom already uses ^A, change monitor escape to ^T` \
     -echr 0x14 \
