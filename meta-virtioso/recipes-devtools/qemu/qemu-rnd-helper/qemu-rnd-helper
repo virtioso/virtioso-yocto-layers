@@ -20,10 +20,15 @@ VIO_TRACE_GUEST_REG_ARG2=$((HYP_FTRACE_BASE + 0x28))
 VIO_TRACE_GUEST_REG_ARG3=$((HYP_FTRACE_BASE + 0x2C))
 CMD_VIO_TRACE_GUEST_EMIT=0x20
 
-# VIO trace source IDs reserved for nested VM1 lifecycle bridge
-VIO_TRACE_SRC_VM1_LAUNCH=12545
-VIO_TRACE_SRC_VM1_HEARTBEAT=12546
-VIO_TRACE_SRC_VM1_EXIT=12547
+# VM0 EL0 trace source/producer IDs and helper lifecycle events
+VIO_TRACE_SRC_VM0_EL0=5
+VIO_TRACE_PROD_VM0_QEMU_SEL4_ACCEL=5
+VIO_TRACE_EV_VM0_QEMU_LAUNCH=26
+VIO_TRACE_EV_VM0_QEMU_HEARTBEAT=27
+VIO_TRACE_EV_VM0_QEMU_EXIT=28
+VIO_TRACE_FLAGS_VM0_QEMU_LAUNCH=$(((VIO_TRACE_PROD_VM0_QEMU_SEL4_ACCEL << 8) | VIO_TRACE_EV_VM0_QEMU_LAUNCH))
+VIO_TRACE_FLAGS_VM0_QEMU_HEARTBEAT=$(((VIO_TRACE_PROD_VM0_QEMU_SEL4_ACCEL << 8) | VIO_TRACE_EV_VM0_QEMU_HEARTBEAT))
+VIO_TRACE_FLAGS_VM0_QEMU_EXIT=$(((VIO_TRACE_PROD_VM0_QEMU_SEL4_ACCEL << 8) | VIO_TRACE_EV_VM0_QEMU_EXIT))
 
 vio_trace_write32() {
     addr="$1"
@@ -268,7 +273,7 @@ fi
     `# that's it!` &
 qemu_pid="$!"
 
-vio_trace_guest_emit "$VIO_TRACE_SRC_VM1_LAUNCH" 0 "$VMID" 0 0 0
+vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_LAUNCH" "$VMID" 0 0 0
 
 if [ "${VIO_TRACE_VM1_BRIDGE:-1}" = "1" ]; then
     (
@@ -277,7 +282,7 @@ if [ "${VIO_TRACE_VM1_BRIDGE:-1}" = "1" ]; then
         while kill -0 "$qemu_pid" >/dev/null 2>&1; do
             sleep "$hb_sec"
             seq=$((seq + 1))
-            vio_trace_guest_emit "$VIO_TRACE_SRC_VM1_HEARTBEAT" 0 "$VMID" "$seq" 0 0
+            vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_HEARTBEAT" "$VMID" "$seq" 0 0
         done
     ) &
     heartbeat_pid="$!"
@@ -286,5 +291,5 @@ fi
 wait "$qemu_pid"
 qemu_rc="$?"
 cleanup_bridge
-vio_trace_guest_emit "$VIO_TRACE_SRC_VM1_EXIT" 0 "$VMID" "$qemu_rc" 0 0
+vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_EXIT" "$VMID" "$qemu_rc" 0 0
 exit "$qemu_rc"
