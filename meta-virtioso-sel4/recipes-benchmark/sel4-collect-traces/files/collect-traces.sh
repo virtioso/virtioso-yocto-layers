@@ -37,6 +37,16 @@ while getopts ':cf:t:h' opt; do
 done
 shift "$(($OPTIND -1))"
 
+TRACE_ROOT="/sys/kernel/debug/vio_trace"
+if [ ! -d "${TRACE_ROOT}" ] && [ -d "/sys/kernel/debug/sel4_tracebuffer" ]; then
+    TRACE_ROOT="/sys/kernel/debug/sel4_tracebuffer"
+fi
+
+if [ ! -d "${TRACE_ROOT}" ]; then
+    echo "ERROR: missing vio_trace debugfs path" >&2
+    exit 1
+fi
+
 if [ -z "$func" ]
 then
     usage
@@ -63,13 +73,13 @@ echo 'Start ftrace'
 echo 1 > /sys/kernel/debug/tracing/tracing_on
 
 echo 'Start seL4 trace'
-echo 1 > /sys/kernel/debug/sel4_tracebuffer/trace_on
+echo 1 > "${TRACE_ROOT}/trace_on"
 
 echo Wait ${time}
 sleep ${time}
 
 echo 'Start seL4 trace'
-echo 0 > /sys/kernel/debug/sel4_tracebuffer/trace_on
+echo 0 > "${TRACE_ROOT}/trace_on"
 
 echo 'Stop ftrace'
 echo 0 > /sys/kernel/debug/tracing/tracing_on
@@ -78,10 +88,10 @@ echo 'Collect ftrace logs'
 trace-cmd extract
 
 echo 'Collect seL4 trace logs'
-cat /sys/kernel/debug/sel4_tracebuffer/tracedata > sel4.dat
+cat "${TRACE_ROOT}/tracedata" > sel4.dat
 
 echo 'Collect seL4 trace txt logs'
-cat /sys/kernel/debug/sel4_tracebuffer/trace > sel4.txt
+cat "${TRACE_ROOT}/trace" > sel4.txt
 
 echo 'Convert seL4 logs to ftrace'
 sel4-extract sel4.dat sel4.out > /dev/null
