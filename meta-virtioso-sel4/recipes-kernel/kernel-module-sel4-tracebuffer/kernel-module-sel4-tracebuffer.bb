@@ -1,4 +1,4 @@
-SUMMARY = "Kernel module to manage seL4 traces: collect and access"
+SUMMARY = "Kernel module to manage canonical vio-trace guest tracebuffer access"
 SECTION = "kernel"
 LICENSE = "GPL-2.0-only"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=b234ee4d69f5fce4486a80fdaf4a4263"
@@ -7,7 +7,7 @@ DEPENDS += " kernel-sel4-support "
 
 inherit module externalsrc
 
-EXTERNALSRC = "/home/hlyytine/tii-sel4/sources/kmod-sel4-tracebuffer"
+EXTERNALSRC = "/home/hlyytine/tii-sel4/sources/kmod-vio-trace"
 EXTERNALSRC_BUILD = "${EXTERNALSRC}"
 
 EXTRA_OEMAKE += "EXTRA_CFLAGS=-I${STAGING_DIR_TARGET}${includedir}"
@@ -15,6 +15,9 @@ EXTRA_OEMAKE += "EXTRA_CFLAGS=-I${STAGING_DIR_TARGET}${includedir}"
 MODULES_INSTALL_TARGET = "modules_install"
 MODULE_NAME = "sel4-tracebuffer"
 KERNEL_MODULE_AUTOLOAD += "${MODULE_NAME}"
+RPROVIDES:kernel-module-${MODULE_NAME} += "kernel-module-vio-trace"
+RREPLACES:kernel-module-${MODULE_NAME} += "kernel-module-vio-trace"
+RCONFLICTS:kernel-module-${MODULE_NAME} += "kernel-module-vio-trace"
 
 # Workaround for do_rootfs spdx generation error:
 # If the module recipe name is prefixed with 'kernel-module-", the spdx
