@@ -5,6 +5,8 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=b234ee4d69f5fce4486a80fdaf4a4263"
 
 inherit module
 
+DEPENDS += "virtioso-contracts"
+
 SEL4_VIRT_LOCAL_SRC = "${VIRTIOSO_LOCAL_SOURCES_DIR}/kmod-sel4-virt"
 SRC_URI = "file://${SEL4_VIRT_LOCAL_SRC}/;subdir=git"
 
@@ -18,7 +20,7 @@ python () {
         bb.fatal("Missing required local source directory: %s" % src)
 }
 
-EXTRA_OEMAKE += "INSTALL_HDR_PATH=${D}"
+EXTRA_OEMAKE += "INSTALL_HDR_PATH=${D} CONTRACTS_INCLUDE_DIR=${STAGING_INCDIR}"
 MODULES_INSTALL_TARGET = "modules_install headers_install"
 MODULE_NAME = "sel4_virt"
 
