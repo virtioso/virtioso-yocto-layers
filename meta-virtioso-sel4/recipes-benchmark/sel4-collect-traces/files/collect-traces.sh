@@ -38,9 +38,6 @@ done
 shift "$(($OPTIND -1))"
 
 TRACE_ROOT="/sys/kernel/debug/vio_trace"
-if [ ! -d "${TRACE_ROOT}" ] && [ -d "/sys/kernel/debug/sel4_tracebuffer" ]; then
-    TRACE_ROOT="/sys/kernel/debug/sel4_tracebuffer"
-fi
 
 if [ ! -d "${TRACE_ROOT}" ]; then
     echo "ERROR: missing vio_trace debugfs path" >&2

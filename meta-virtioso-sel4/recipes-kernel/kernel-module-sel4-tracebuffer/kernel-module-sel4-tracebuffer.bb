@@ -13,11 +13,11 @@ EXTERNALSRC_BUILD = "${EXTERNALSRC}"
 EXTRA_OEMAKE += "EXTRA_CFLAGS=-I${STAGING_DIR_TARGET}${includedir}"
 
 MODULES_INSTALL_TARGET = "modules_install"
-MODULE_NAME = "sel4-tracebuffer"
+MODULE_NAME = "vio-trace"
 KERNEL_MODULE_AUTOLOAD += "${MODULE_NAME}"
-RPROVIDES:kernel-module-${MODULE_NAME} += "kernel-module-vio-trace"
-RREPLACES:kernel-module-${MODULE_NAME} += "kernel-module-vio-trace"
-RCONFLICTS:kernel-module-${MODULE_NAME} += "kernel-module-vio-trace"
+RPROVIDES:kernel-module-${MODULE_NAME} += "kernel-module-sel4-tracebuffer"
+RREPLACES:kernel-module-${MODULE_NAME} += "kernel-module-sel4-tracebuffer"
+RCONFLICTS:kernel-module-${MODULE_NAME} += "kernel-module-sel4-tracebuffer"
 
 # Workaround for do_rootfs spdx generation error:
 # If the module recipe name is prefixed with 'kernel-module-", the spdx
