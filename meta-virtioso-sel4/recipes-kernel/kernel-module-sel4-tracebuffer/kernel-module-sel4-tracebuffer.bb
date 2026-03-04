@@ -15,9 +15,16 @@ EXTRA_OEMAKE += "EXTRA_CFLAGS=-I${STAGING_DIR_TARGET}${includedir}"
 MODULES_INSTALL_TARGET = "modules_install"
 MODULE_NAME = "vio-trace"
 KERNEL_MODULE_AUTOLOAD += "${MODULE_NAME}"
-RPROVIDES:kernel-module-${MODULE_NAME} += "kernel-module-sel4-tracebuffer"
-RREPLACES:kernel-module-${MODULE_NAME} += "kernel-module-sel4-tracebuffer"
-RCONFLICTS:kernel-module-${MODULE_NAME} += "kernel-module-sel4-tracebuffer"
+
+# Keep canonical install name while this recipe PN/path is still legacy.
+RPROVIDES:${PN} += "kernel-module-vio-trace"
+RREPLACES:${PN} += "kernel-module-vio-trace"
+RCONFLICTS:${PN} += "kernel-module-vio-trace"
+
+# Transitional compatibility for older manifests/install lists.
+RPROVIDES:${PN} += "kernel-module-sel4-tracebuffer"
+RREPLACES:${PN} += "kernel-module-sel4-tracebuffer"
+RCONFLICTS:${PN} += "kernel-module-sel4-tracebuffer"
 
 # Workaround for do_rootfs spdx generation error:
 # If the module recipe name is prefixed with 'kernel-module-", the spdx
