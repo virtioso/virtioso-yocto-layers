@@ -13,7 +13,7 @@ EXTERNALSRC_BUILD = "${EXTERNALSRC}"
 EXTRA_OEMAKE += "EXTRA_CFLAGS=-I${STAGING_DIR_TARGET}${includedir}"
 
 MODULES_INSTALL_TARGET = "modules_install"
-MODULE_NAME = "vio-trace"
+MODULE_NAME = "vio_trace"
 KERNEL_MODULE_AUTOLOAD += "${MODULE_NAME}"
 
 # Keep canonical install name while this recipe PN/path is still legacy.

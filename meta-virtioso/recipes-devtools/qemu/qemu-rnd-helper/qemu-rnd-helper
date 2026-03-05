@@ -124,8 +124,9 @@ GUEST_MEMSZ=${GUEST_MEMSZ:-256}
 
 if test "x${ACCEL}" = "xsel4"; then
     modprobe sel4_virt
-    if ! modprobe vio-trace >/dev/null 2>&1; then
-        echo "VIO_TRACE_DIAG: failed to load vio-trace module via modprobe vio-trace"
+    if ! modprobe vio_trace >/tmp/vio-trace-modprobe.log 2>&1; then
+        echo "VIO_TRACE_DIAG: failed to load vio_trace module via modprobe vio_trace"
+        sed 's/^/VIO_TRACE_DIAG: modprobe vio_trace: /' /tmp/vio-trace-modprobe.log || true
     fi
 else
     # using something else, let's default to KVM
