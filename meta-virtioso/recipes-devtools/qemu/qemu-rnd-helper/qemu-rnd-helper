@@ -172,76 +172,89 @@ cleanup_bridge() {
 }
 trap cleanup_bridge EXIT INT TERM
 
-ensure_sel4_tracebuffer_dev() {
+ensure_sel4_bridge_dev() {
     major=""
-    if [ -c /dev/sel4_tracebuffer ] && [ -r /dev/sel4_tracebuffer ] && [ -w /dev/sel4_tracebuffer ]; then
+    if [ -c /dev/sel4 ] && [ -r /dev/sel4 ] && [ -w /dev/sel4 ]; then
         return 0
     fi
 
-    minor="$(awk '$2 == "sel4_tracebuffer" { print $1; exit }' /proc/misc 2>/dev/null)"
+    minor="$(awk '$2 == "sel4" { print $1; exit }' /proc/misc 2>/dev/null)"
     if [ -n "$minor" ]; then
-        if [ ! -e /dev/sel4_tracebuffer ]; then
-            mknod /dev/sel4_tracebuffer c 10 "$minor" >/dev/null 2>&1 || true
+        if [ ! -e /dev/sel4 ]; then
+            mknod /dev/sel4 c 10 "$minor" >/dev/null 2>&1 || true
         fi
-        chmod 0660 /dev/sel4_tracebuffer >/dev/null 2>&1 || true
+        chmod 0660 /dev/sel4 >/dev/null 2>&1 || true
     fi
 
     if [ -z "$minor" ]; then
-        major="$(awk '$2 == "sel4_tracebuffer" { print $1; exit }' /proc/devices 2>/dev/null)"
+        major="$(awk '$2 == "sel4" { print $1; exit }' /proc/devices 2>/dev/null)"
         if [ -n "$major" ]; then
-            if [ ! -e /dev/sel4_tracebuffer ]; then
-                mknod /dev/sel4_tracebuffer c "$major" 0 >/dev/null 2>&1 || true
+            if [ ! -e /dev/sel4 ]; then
+                mknod /dev/sel4 c "$major" 0 >/dev/null 2>&1 || true
             fi
-            chmod 0660 /dev/sel4_tracebuffer >/dev/null 2>&1 || true
+            chmod 0660 /dev/sel4 >/dev/null 2>&1 || true
         fi
     fi
 
-    [ -c /dev/sel4_tracebuffer ] && [ -r /dev/sel4_tracebuffer ] && [ -w /dev/sel4_tracebuffer ]
+    [ -c /dev/sel4 ] && [ -r /dev/sel4 ] && [ -w /dev/sel4 ]
 }
 
-tracebuffer_diag_dump() {
-    misc_line="$(awk '$2 == "sel4_tracebuffer" { print; exit }' /proc/misc 2>/dev/null)"
+vio_trace_diag_dump() {
+    misc_line="$(awk '$2 == "sel4" { print; exit }' /proc/misc 2>/dev/null)"
     if [ -n "$misc_line" ]; then
-        echo "VIO_TRACE_DIAG: /proc/misc sel4_tracebuffer: $misc_line"
+        echo "VIO_TRACE_DIAG: /proc/misc sel4: $misc_line"
     else
-        echo "VIO_TRACE_DIAG: /proc/misc sel4_tracebuffer: missing"
+        echo "VIO_TRACE_DIAG: /proc/misc sel4: missing"
     fi
 
-    devices_line="$(awk '$2 == "sel4_tracebuffer" { print; exit }' /proc/devices 2>/dev/null)"
+    devices_line="$(awk '$2 == "sel4" { print; exit }' /proc/devices 2>/dev/null)"
     if [ -n "$devices_line" ]; then
-        echo "VIO_TRACE_DIAG: /proc/devices sel4_tracebuffer: $devices_line"
+        echo "VIO_TRACE_DIAG: /proc/devices sel4: $devices_line"
     else
-        echo "VIO_TRACE_DIAG: /proc/devices sel4_tracebuffer: missing"
+        echo "VIO_TRACE_DIAG: /proc/devices sel4: missing"
     fi
 
-    if [ -e /dev/sel4_tracebuffer ]; then
-        ls -l /dev/sel4_tracebuffer | sed 's/^/VIO_TRACE_DIAG: /'
+    if [ -e /dev/sel4 ]; then
+        ls -l /dev/sel4 | sed 's/^/VIO_TRACE_DIAG: /'
     else
-        echo "VIO_TRACE_DIAG: /dev/sel4_tracebuffer missing"
+        echo "VIO_TRACE_DIAG: /dev/sel4 missing"
     fi
 
-    if [ -d /sys/bus/platform/drivers/sel4_tracebuffer ]; then
-        bound="$(ls -1 /sys/bus/platform/drivers/sel4_tracebuffer 2>/dev/null | tr '\n' ' ')"
-        echo "VIO_TRACE_DIAG: driver /sys/bus/platform/drivers/sel4_tracebuffer entries: $bound"
+    if [ -d /sys/class/misc/sel4 ]; then
+        echo "VIO_TRACE_DIAG: /sys/class/misc/sel4 present"
     else
-        echo "VIO_TRACE_DIAG: driver /sys/bus/platform/drivers/sel4_tracebuffer missing"
+        echo "VIO_TRACE_DIAG: /sys/class/misc/sel4 missing"
     fi
+
+    if [ -d /sys/module/vio_trace ]; then
+        echo "VIO_TRACE_DIAG: /sys/module/vio_trace present"
+    else
+        echo "VIO_TRACE_DIAG: /sys/module/vio_trace missing"
+    fi
+
+    if [ -d /sys/module/sel4_virt ]; then
+        echo "VIO_TRACE_DIAG: /sys/module/sel4_virt present"
+    else
+        echo "VIO_TRACE_DIAG: /sys/module/sel4_virt missing"
+    fi
+
+    echo "VIO_TRACE_DIAG: legacy sel4_tracebuffer node paths are retired; canonical bridge path is /dev/sel4"
 }
 
-tracebuffer_wait_s="${SEL4_TRACEBUFFER_WAIT_SEC:-10}"
-while [ "$tracebuffer_wait_s" -gt 0 ]; do
-    if ensure_sel4_tracebuffer_dev; then
-        echo "VIO_TRACE_DIAG: sel4_tracebuffer device ready"
-        tracebuffer_diag_dump
+sel4_bridge_wait_s="${VIO_TRACE_BRIDGE_WAIT_SEC:-10}"
+while [ "$sel4_bridge_wait_s" -gt 0 ]; do
+    if ensure_sel4_bridge_dev; then
+        echo "VIO_TRACE_DIAG: /dev/sel4 bridge ready"
+        vio_trace_diag_dump
         break
     fi
     sleep 1
-    tracebuffer_wait_s=$((tracebuffer_wait_s - 1))
+    sel4_bridge_wait_s=$((sel4_bridge_wait_s - 1))
 done
 
-if [ "$tracebuffer_wait_s" -eq 0 ]; then
-    echo "VIO_TRACE_DIAG: sel4_tracebuffer device unavailable after wait"
-    tracebuffer_diag_dump
+if [ "$sel4_bridge_wait_s" -eq 0 ]; then
+    echo "VIO_TRACE_DIAG: /dev/sel4 bridge unavailable after wait"
+    vio_trace_diag_dump
 fi
 
 /usr/bin/qemu-system-aarch64 \
