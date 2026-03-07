@@ -130,7 +130,6 @@ if test "x${ACCEL}" = "xsel4"; then
         else
             modprobe sel4_virt direct_delegation=1
         fi
-        export SEL4_QEMU_DIRECT_DELEG=1
         echo "sel4 direct delegation enabled"
     else
         modprobe sel4_virt
