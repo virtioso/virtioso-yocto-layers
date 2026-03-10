@@ -66,6 +66,19 @@ vio_trace_guest_emit() {
     return 0
 }
 
+vio_trace_ready() {
+    if grep '^vio_trace ' /proc/modules >/dev/null 2>&1; then
+        return 0
+    fi
+    if [ -c /dev/vio_trace ]; then
+        return 0
+    fi
+    if [ -d /sys/bus/platform/drivers/vio_trace ]; then
+        return 0
+    fi
+    return 1
+}
+
 if test "x${VMID}" = "x"; then
     VMID=1
     echo "VMID not specified, defaulting to ${VMID}"
@@ -134,10 +147,10 @@ if test "x${ACCEL}" = "xsel4"; then
     else
         modprobe sel4_virt
     fi
-    if grep '^vio_trace ' /proc/modules 2>&1; then
-        echo "vio_trace module loaded"
+    if vio_trace_ready; then
+        echo "vio_trace ready"
     else
-        echo "ERROR: vio_trace module not loaded"
+        echo "ERROR: vio_trace not ready"
         exit 1
     fi
 else
