@@ -289,9 +289,6 @@ fi
     -chardev stdio,id=mon,mux=on,signal=off \
     `# enable monitor` \
     -mon chardev=mon,mode=readline \
-    `# virtio-console` \
-    -device virtio-serial-pci${GUEST_DEV_ARGS_APPEND} \
-    -device virtconsole,chardev=mon,id=console0,name=qemu.uservm \
     `# no serial, emulating pl011 @ 0x09000000 in seL4 code` \
     -serial none \
     `# extra options` \
