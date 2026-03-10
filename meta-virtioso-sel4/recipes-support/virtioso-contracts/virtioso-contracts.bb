@@ -25,6 +25,7 @@ do_install() {
     install -d ${D}${includedir}/virtioso/trace
 
     install -m 0644 ${S}/include/virtioso/backend/mailbox.h ${D}${includedir}/virtioso/backend/
+    install -m 0644 ${S}/include/virtioso/backend/control_mailbox.h ${D}${includedir}/virtioso/backend/
     install -m 0644 ${S}/include/virtioso/rpc/rpc.h ${D}${includedir}/virtioso/rpc/
     install -m 0644 ${S}/include/virtioso/rpc/rpc_queue.h ${D}${includedir}/virtioso/rpc/
     install -m 0644 ${S}/include/virtioso/trace/trace_contract.h ${D}${includedir}/virtioso/trace/
