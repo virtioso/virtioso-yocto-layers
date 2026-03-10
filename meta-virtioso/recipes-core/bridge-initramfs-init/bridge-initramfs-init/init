@@ -108,13 +108,6 @@ load_platform_drivers() {
             ;;
     esac
 
-    # Auto-load any remaining drivers via modalias (AFTER critical drivers)
-    echo "Auto-loading remaining drivers via modalias..."
-    find /sys -name modalias -print0 2>/dev/null | while IFS= read -r -d '' m; do
-        modalias=$(cat "$m")
-        modprobe "$modalias" || echo "modprobe $modalias failed"
-    done
-
     # Common: TUN module for TAP devices
     echo "Loading TUN module..."
     modprobe tun || echo "modprobe tun failed"
@@ -217,12 +210,6 @@ EOF
 
 try_emmc_boot() {
     echo "=== Attempting eMMC fallback ==="
-
-    echo "Loading sel4_virt before eMMC rootfs mount..."
-    if ! modprobe sel4_virt; then
-        echo "Failed to load sel4_virt"
-        return 1
-    fi
 
     # Wait for eMMC
     echo "Waiting for eMMC (mmcblk0)..."
