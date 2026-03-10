@@ -134,9 +134,11 @@ if test "x${ACCEL}" = "xsel4"; then
     else
         modprobe sel4_virt
     fi
-    if ! modprobe vio_trace >/tmp/vio-trace-modprobe.log 2>&1; then
-        echo "VIO_TRACE_DIAG: failed to load vio_trace module via modprobe vio_trace"
-        sed 's/^/VIO_TRACE_DIAG: modprobe vio_trace: /' /tmp/vio-trace-modprobe.log || true
+    if grep '^vio_trace ' /proc/modules 2>&1; then
+        echo "vio_trace module loaded"
+    else
+        echo "ERROR: vio_trace module not loaded"
+        exit 1
     fi
 else
     # using something else, let's default to KVM
