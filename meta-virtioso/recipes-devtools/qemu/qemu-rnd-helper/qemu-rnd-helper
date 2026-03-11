@@ -106,12 +106,12 @@ GUEST_DEV_ARGS_APPEND="${GUEST_DEV_ARGS_APPEND:-}"
 case "${VMID}" in
     1)
         GUEST_NET_ARGS="${GUEST_NET_ARGS} -netdev tap,id=net0,ifname=tap0,script=no,downscript=no${GUEST_NET_ARGS_APPEND}"
-        GUEST_NET_ARGS="${GUEST_NET_ARGS} -device virtio-net-pci,romfile=,netdev=net0,mac=02:ca:fe:f0:0d:01${GUEST_DEV_ARGS_APPEND}"
+        GUEST_NET_ARGS="${GUEST_NET_ARGS} -device virtio-net-pci,romfile=,netdev=net0,mac=02:ca:fe:f0:0d:01,disable-legacy=on${GUEST_DEV_ARGS_APPEND}"
         echo "Guest using tap0 for network"
         ;;
     2)
         GUEST_NET_ARGS="${GUEST_NET_ARGS} -netdev tap,id=net1,ifname=tap1,script=no,downscript=no${GUEST_NET_ARGS_APPEND}"
-        GUEST_NET_ARGS="${GUEST_NET_ARGS} -device virtio-net-pci,romfile=,netdev=net1,mac=02:ca:fe:f0:0d:02${GUEST_DEV_ARGS_APPEND}"
+        GUEST_NET_ARGS="${GUEST_NET_ARGS} -device virtio-net-pci,romfile=,netdev=net1,mac=02:ca:fe:f0:0d:02,disable-legacy=on${GUEST_DEV_ARGS_APPEND}"
         echo "Guest using tap1 for network"
         ;;
     *)
@@ -175,7 +175,7 @@ case "${ROOTFS_STORAGE}" in
     extra_ramdisk)
         qemu-img create -f raw ${VMTMPDIR}/ramdisk.raw 128M
         mke2fs ${VMTMPDIR}/ramdisk.raw
-        QEMU_EXTRA_ARGS="${QEMU_EXTRA_ARGS} -device virtio-blk-pci,drive=drive1,id=virtblk1${GUEST_DEV_ARGS_APPEND}"
+        QEMU_EXTRA_ARGS="${QEMU_EXTRA_ARGS} -device virtio-blk-pci,drive=drive1,id=virtblk1,disable-legacy=on${GUEST_DEV_ARGS_APPEND}"
         QEMU_EXTRA_ARGS="${QEMU_EXTRA_ARGS} -drive format=raw,file="${VMTMPDIR}"/ramdisk.raw,if=none,id=drive1"
         echo "Guest rootfs: using host permanent storage at ${GUEST_IMG}" 1>&2
         echo "Providing additional volatile 128 MB /dev/vdb to guest" 1>&2
@@ -294,7 +294,7 @@ fi
     -M virt \
     -m ${GUEST_MEMSZ}m \
     `# virtio-blk device for guest rootfs` \
-    -device virtio-blk-pci,drive=drive0,id=virtblk0${GUEST_DEV_ARGS_APPEND} \
+    -device virtio-blk-pci,drive=drive0,id=virtblk0,disable-legacy=on${GUEST_DEV_ARGS_APPEND} \
     -drive format=qcow2,file=${GUEST_IMG},if=none,id=drive0 \
     `# share directory to guest over 9P` \
     -virtfs local,path=${GUEST_SHARED},mount_tag=shared,security_model=mapped-xattr \
