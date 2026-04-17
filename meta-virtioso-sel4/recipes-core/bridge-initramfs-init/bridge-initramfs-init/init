@@ -19,6 +19,7 @@ PLATFORM="qemu"
 
 log_info() {
     echo "VIRTIOSO_INIT: $*"
+    [ -e /dev/kmsg ] || mknod -m 600 /dev/kmsg c 1 11 2>/dev/null || true
     if [ -w /dev/kmsg ]; then
         echo "VIRTIOSO_INIT: $*" > /dev/kmsg 2>/dev/null || true
     fi
@@ -134,6 +135,7 @@ wait_for_device() {
 
     echo "Waiting for ${dev_path}..."
     while [ ! -b "$dev_path" ] && [ $count -lt "$timeout_ticks" ]; do
+        ensure_block_device_node "$dev_path"
         sleep 0.1
         count=$((count + 1))
     done
@@ -145,6 +147,25 @@ wait_for_device() {
 
     echo "${dev_path} not found after $((timeout_ticks / 10)) seconds"
     return 1
+}
+
+ensure_block_device_node() {
+    dev_path="$1"
+    dev_name="${dev_path#/dev/}"
+    sysfs_dev="/sys/class/block/${dev_name}/dev"
+
+    if [ -b "$dev_path" ] || [ ! -r "$sysfs_dev" ]; then
+        return 0
+    fi
+
+    devnums=$(cat "$sysfs_dev" 2>/dev/null) || return 0
+    major=${devnums%%:*}
+    minor=${devnums##*:}
+
+    if [ -n "$major" ] && [ -n "$minor" ]; then
+        log_info "Creating missing block node ${dev_path} (${major}:${minor}) from sysfs"
+        mknod -m 660 "$dev_path" b "$major" "$minor" 2>/dev/null || true
+    fi
 }
 
 wait_for_ethernet() {
@@ -197,9 +218,14 @@ try_virtio_blk_boot() {
         return 1
     fi
 
+    if [ ! -b "$VIRTIO_ROOT_DEV" ] && [ -r "/sys/class/block/${VIRTIO_ROOT_DEV#/dev/}/dev" ]; then
+        log_info "Sysfs reports ${VIRTIO_ROOT_DEV} but device node is still missing"
+    fi
+
     log_info "Mounting ${VIRTIO_ROOT_DEV} on /newroot"
     if ! mount -o rw "$VIRTIO_ROOT_DEV" /newroot; then
         log_info "Virtio-blk mount failed: ${VIRTIO_ROOT_DEV}"
+        ls -l "$VIRTIO_ROOT_DEV" /sys/class/block/"${VIRTIO_ROOT_DEV#/dev/}" 2>/dev/null || true
         return 1
     fi
 
