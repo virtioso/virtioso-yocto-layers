@@ -17,8 +17,15 @@ PLATFORM="qemu"
 # Functions
 #############################################################################
 
+log_info() {
+    echo "VIRTIOSO_INIT: $*"
+    if [ -w /dev/kmsg ]; then
+        echo "VIRTIOSO_INIT: $*" > /dev/kmsg 2>/dev/null || true
+    fi
+}
+
 mount_essential_filesystems() {
-    echo "Mounting essential filesystems..."
+    log_info "Mounting essential filesystems"
     mkdir -p /proc /sys /dev /tmp /run /newroot /mnt/emmc
 
     mount -t proc proc /proc
@@ -66,11 +73,11 @@ detect_platform() {
         fi
     fi
 
-    echo "Detected platform: $PLATFORM"
+    log_info "Detected platform: $PLATFORM"
 }
 
 load_platform_drivers() {
-    echo "Loading platform drivers for $PLATFORM..."
+    log_info "Loading platform drivers for $PLATFORM"
 
     case "$PLATFORM" in
         orinagx)
@@ -88,11 +95,11 @@ load_platform_drivers() {
         rpi4)
             ;;
         qemu)
-            echo "QEMU target: expecting virtio devices to enumerate automatically"
+            log_info "QEMU target: expecting virtio devices to enumerate automatically"
             ;;
     esac
 
-    echo "Loading TUN module..."
+    log_info "Loading TUN module"
     modprobe tun || echo "modprobe tun failed"
 }
 
@@ -139,7 +146,7 @@ setup_tap_bridge() {
         return 1
     fi
 
-    echo "Setting up TAP bridge..."
+    log_info "Setting up TAP bridge"
     brctl addbr br0
     ip addr flush dev eth0
     brctl addif br0 eth0
@@ -154,24 +161,25 @@ setup_tap_bridge() {
     ip link set tap1 up
     ip link set br0 up
 
-    echo "Bridge br0 configured with eth0, tap0, tap1"
+    log_info "Bridge br0 configured with eth0, tap0, tap1"
     return 0
 }
 
 try_virtio_blk_boot() {
-    echo "=== Attempting QEMU virtio-blk boot ==="
+    log_info "Attempting QEMU virtio-blk boot"
 
     if ! wait_for_device "$VIRTIO_ROOT_DEV" 50; then
+        log_info "QEMU virtio-blk device missing: ${VIRTIO_ROOT_DEV}"
         return 1
     fi
 
-    echo "Mounting ${VIRTIO_ROOT_DEV} on /newroot..."
+    log_info "Mounting ${VIRTIO_ROOT_DEV} on /newroot"
     if ! mount -o rw "$VIRTIO_ROOT_DEV" /newroot; then
-        echo "Virtio-blk mount failed: ${VIRTIO_ROOT_DEV}"
+        log_info "Virtio-blk mount failed: ${VIRTIO_ROOT_DEV}"
         return 1
     fi
 
-    echo "QEMU virtio-blk boot successful"
+    log_info "QEMU virtio-blk boot successful"
     return 0
 }
 
@@ -307,10 +315,7 @@ verify_init() {
 }
 
 do_switch_root() {
-    echo ""
-    echo "=== Switching to rootfs ==="
-    echo "Init: ${INIT_PATH}"
-    echo ""
+    log_info "Switching to rootfs via ${INIT_PATH}"
 
     mount --move /sys /newroot/sys 2>/dev/null || mount -t sysfs sysfs /newroot/sys
     mount --move /proc /newroot/proc 2>/dev/null || mount -t proc proc /newroot/proc
@@ -334,7 +339,7 @@ drop_to_shell() {
 # Main
 #############################################################################
 
-echo "=== seL4 VM Unified Init ==="
+log_info "seL4 VM Unified Init"
 
 mount_essential_filesystems
 
@@ -365,7 +370,7 @@ fi
 if [ "$BOOT_OK" -eq 0 ]; then
     if wait_for_ethernet && setup_tap_bridge; then
         if try_nfs_boot; then
-            echo "NFS boot succeeded"
+            log_info "NFS boot succeeded"
             BOOT_OK=1
         fi
     else
@@ -375,13 +380,13 @@ fi
 
 if [ "$BOOT_OK" -eq 0 ]; then
     if try_emmc_boot; then
-        echo "eMMC boot succeeded"
+        log_info "eMMC boot succeeded"
         BOOT_OK=1
     fi
 fi
 
 if [ "$BOOT_OK" -eq 0 ]; then
-    echo "All boot methods failed"
+    log_info "All boot methods failed"
     drop_to_shell
 fi
 
