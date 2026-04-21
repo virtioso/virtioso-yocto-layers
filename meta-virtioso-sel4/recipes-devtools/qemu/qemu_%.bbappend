@@ -19,7 +19,7 @@
 #
 # The seL4 virt machine has been updated to work with this change.
 
-QEMU_TARGETS = "aarch64"
+QEMU_TARGETS = "aarch64 x86_64"
 
 QEMU_SEL4_DEPS = ""
 QEMU_SEL4_DEPS:class-target = "kernel-module-sel4-virt virtioso-contracts"
