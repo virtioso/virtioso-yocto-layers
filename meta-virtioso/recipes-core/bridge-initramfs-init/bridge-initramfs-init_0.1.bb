@@ -39,6 +39,7 @@ RDEPENDS:${PN}:append:vm-jetson-agx-orin = " \
 
 do_install:append() {
     install -m 0755 ${UNPACKDIR}/init ${D}/init
+    sed -i 's#@DEFAULT_ROOTFS_IMAGE@#var/lib/virtioso-vm-images/vm-image-driver-${MACHINE}.rootfs.ext4#g' ${D}/init
 
     # Create mount point directories
     install -d ${D}/proc

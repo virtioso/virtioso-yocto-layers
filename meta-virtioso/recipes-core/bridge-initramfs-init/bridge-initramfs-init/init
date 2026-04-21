@@ -1,22 +1,26 @@
 #!/bin/sh
 #
-# Unified init for seL4 VM with NFS primary, eMMC fallback
+# Unified init for seL4 VM with platform-aware rootfs selection
 #
 # Boot sequence:
 # 1. Mount essential filesystems
 # 2. Detect platform (orinagx/rpi4/qemu)
 # 3. Load platform-specific drivers
 # 4. Set up TAP bridge (br0, tap0, tap1)
-# 5. Try NFS boot (DHCP + NFS mount)
-# 6. If NFS fails, try eMMC/loop mount
-# 7. If all fails, drop to shell
+# 5. If root= names a block device, mount it
+# 6. If root=/dev/nfs, try NFS boot
+# 7. Otherwise, try eMMC/loop mount
+# 8. If all fails, drop to shell
 #
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 # Configurable defaults (can override via cmdline)
-ROOTFS_IMAGE="${ROOTFS_IMAGE:-var/lib/virtioso-vm-images/vm-image-driver-vm-jetson-agx-orin.rootfs.ext4}"
+DEFAULT_ROOTFS_IMAGE="@DEFAULT_ROOTFS_IMAGE@"
+ROOTFS_IMAGE="${ROOTFS_IMAGE:-$DEFAULT_ROOTFS_IMAGE}"
 EMMC_PART="/dev/mmcblk0p1"
+ROOT_DEV=""
+ROOT_FLAGS=""
 DROP_TO_SHELL=""
 PLATFORM="qemu"
 
@@ -54,9 +58,31 @@ parse_cmdline() {
         case "$arg" in
             rootfs_image=*) ROOTFS_IMAGE="${arg#rootfs_image=}" ;;
             emmc_part=*)    EMMC_PART="${arg#emmc_part=}" ;;
+            root=*)         ROOT_DEV="${arg#root=}" ;;
+            rootflags=*)    ROOT_FLAGS="${arg#rootflags=}" ;;
             shell)          DROP_TO_SHELL=1 ;;
         esac
     done
+}
+
+wait_for_block_device() {
+    dev_path="$1"
+    timeout_ticks="${2:-50}"
+
+    echo "Waiting for ${dev_path}..."
+    count=0
+    while [ ! -b "$dev_path" ] && [ $count -lt "$timeout_ticks" ]; do
+        sleep 0.1
+        count=$((count + 1))
+    done
+
+    if [ -b "$dev_path" ]; then
+        echo "${dev_path} found"
+        return 0
+    fi
+
+    echo "${dev_path} not found after $((timeout_ticks / 10)) seconds"
+    return 1
 }
 
 detect_platform() {
@@ -205,6 +231,44 @@ EOF
     fi
 
     echo "NFS boot successful"
+    return 0
+}
+
+try_root_device_boot() {
+    echo "=== Attempting root= device boot ==="
+
+    if [ -z "$ROOT_DEV" ]; then
+        echo "No root= kernel bootarg provided"
+        return 1
+    fi
+
+    case "$ROOT_DEV" in
+        /dev/*) ;;
+        *)
+            echo "Unsupported root= value for initramfs mount: ${ROOT_DEV}"
+            return 1
+            ;;
+    esac
+
+    if ! wait_for_block_device "$ROOT_DEV" 50; then
+        return 1
+    fi
+
+    if [ -n "$ROOT_FLAGS" ]; then
+        echo "Mounting ${ROOT_DEV} on /newroot with rootflags=${ROOT_FLAGS}"
+        if ! mount -o "rw,${ROOT_FLAGS}" "$ROOT_DEV" /newroot; then
+            echo "Failed to mount root device: ${ROOT_DEV}"
+            return 1
+        fi
+    else
+        echo "Mounting ${ROOT_DEV} on /newroot"
+        if ! mount -o rw "$ROOT_DEV" /newroot; then
+            echo "Failed to mount root device: ${ROOT_DEV}"
+            return 1
+        fi
+    fi
+
+    echo "root= device boot successful"
     return 0
 }
 
@@ -373,10 +437,31 @@ load_platform_drivers
 wait_for_ethernet
 setup_tap_bridge
 
-# Phase 5: Boot - try NFS first, then eMMC fallback
+# Phase 5: Boot
 INIT_PATH="/sbin/init"
 
-if try_nfs_boot; then
+if [ -n "$ROOT_DEV" ] && [ "$ROOT_DEV" != "/dev/nfs" ]; then
+    if try_root_device_boot; then
+        echo "root= device boot succeeded"
+    else
+        echo "root= device boot failed"
+        if try_emmc_boot; then
+            echo "eMMC boot succeeded"
+        else
+            echo "All boot methods failed"
+            drop_to_shell
+        fi
+    fi
+elif [ "$ROOT_DEV" = "/dev/nfs" ]; then
+    if try_nfs_boot; then
+        echo "NFS boot succeeded"
+    elif try_emmc_boot; then
+        echo "eMMC boot succeeded"
+    else
+        echo "All boot methods failed"
+        drop_to_shell
+    fi
+elif try_nfs_boot; then
     echo "NFS boot succeeded"
 elif try_emmc_boot; then
     echo "eMMC boot succeeded"
