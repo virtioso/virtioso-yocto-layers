@@ -15,7 +15,6 @@ IMAGE_INSTALL:append = " \
 IMAGE_FEATURES += " \
     qemu-virtualization \
     benchmark \
-    trace \
     "
 
 export IMAGE_BASENAME = "vm-image-driver"
