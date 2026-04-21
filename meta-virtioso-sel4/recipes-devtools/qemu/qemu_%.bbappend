@@ -57,3 +57,20 @@ python () {
 # Git source doesn't bundle meson subprojects like the tarball does
 # Allow meson to download them during configure
 EXTRA_OECONF:remove = "--disable-download"
+
+# Ensure the built system QEMU binaries include the SJA1000-based PCI CAN
+# devices such as kvaser_pci. On Linux hosts, can-host-socketcan is compiled
+# automatically when CAN bus support is enabled, so there is no separate
+# socketcan meson option to toggle here.
+enable_qemu_can_support() {
+    for cfg in \
+        ${S}/configs/devices/aarch64-softmmu/default.mak \
+        ${S}/configs/devices/x86_64-softmmu/default.mak; do
+        grep -q '^CONFIG_CAN_SJA1000=y$' "$cfg" || echo 'CONFIG_CAN_SJA1000=y' >> "$cfg"
+        grep -q '^CONFIG_CAN_PCI=y$' "$cfg" || echo 'CONFIG_CAN_PCI=y' >> "$cfg"
+    done
+}
+
+do_configure:prepend() {
+    enable_qemu_can_support
+}
