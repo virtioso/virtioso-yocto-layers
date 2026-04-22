@@ -28,11 +28,10 @@ do_install[noexec] = "1"
 do_deploy[depends] += "qemu-system-native:do_populate_sysroot"
 do_deploy() {
     install -d "${VIRTIOSO_QEMU_RUNTIME_DEPLOY_DIR}"
-    python3 "${WORKDIR}/create_virtioso_qemu_runtime.py" \
+    python3 "${UNPACKDIR}/create_virtioso_qemu_runtime.py" \
         --artifact-name "${VIRTIOSO_QEMU_RUNTIME_ARTIFACT}" \
-        --qemu-binary "${WORKDIR}/../qemu-system-native/${PV}/build/qemu-system-x86_64" \
-        --support-usr "${WORKDIR}/../qemu-system-native/${PV}/recipe-sysroot-native/usr" \
-        --pc-bios-dir "${WORKDIR}/../qemu-system-native/${PV}/build/pc-bios" \
+        --qemu-binary "${STAGING_BINDIR_NATIVE}/qemu-system-x86_64" \
+        --support-usr "${RECIPE_SYSROOT_NATIVE}/usr" \
         --interpreter "${UNINATIVE_LOADER}" \
         --uninative-root "${TMPDIR}/sysroots-uninative" \
         --output-tar "${VIRTIOSO_QEMU_RUNTIME_TAR}" \

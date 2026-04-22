@@ -8,7 +8,6 @@ import os
 import re
 import shutil
 import subprocess
-import tarfile
 import tempfile
 from pathlib import Path
 
@@ -129,7 +128,7 @@ def build_runtime_tree(args: argparse.Namespace, root: Path) -> None:
         if share_dir.exists():
             copy_file_preserve_rel(share_dir, args.support_usr, usr)
 
-    if args.pc_bios_dir.exists():
+    if args.pc_bios_dir and args.pc_bios_dir.exists():
         copy_tree(args.pc_bios_dir, root / "pc-bios")
         sanitize_pc_bios_tree(root / "pc-bios")
 
@@ -154,8 +153,10 @@ def build_runtime_tree(args: argparse.Namespace, root: Path) -> None:
 
 def create_tarball(staging_root: Path, output_tar: Path) -> None:
     output_tar.parent.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(output_tar, "w:zst") as tf:
-        tf.add(staging_root, arcname=staging_root.name)
+    subprocess.run(
+        ["tar", "--zstd", "-cf", str(output_tar), "-C", str(staging_root.parent), staging_root.name],
+        check=True,
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -163,7 +164,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--artifact-name", required=True)
     parser.add_argument("--qemu-binary", required=True, type=Path)
     parser.add_argument("--support-usr", required=True, type=Path)
-    parser.add_argument("--pc-bios-dir", required=True, type=Path)
+    parser.add_argument("--pc-bios-dir", type=Path)
     parser.add_argument("--interpreter", default="")
     parser.add_argument("--uninative-root", required=True, type=Path)
     parser.add_argument("--output-tar", required=True, type=Path)
