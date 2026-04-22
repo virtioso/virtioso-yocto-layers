@@ -2,6 +2,8 @@ SUMMARY = "Relocatable x86_64 host QEMU runtime artifact"
 DESCRIPTION = "Produces a deployable runtime tarball for the Yocto-built qemu-system-x86_64 host runtime."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
+PN = "virtioso-qemu-runtime-x86_64"
+PV = "1.0"
 
 inherit nopackages
 
