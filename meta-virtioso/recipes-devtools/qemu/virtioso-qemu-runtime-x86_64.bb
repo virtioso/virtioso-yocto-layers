@@ -9,7 +9,7 @@ DEPENDS = "qemu-system-native"
 
 SRC_URI = "file://create_virtioso_qemu_runtime.py"
 
-S = "${WORKDIR}"
+S = "${UNPACKDIR}"
 
 PACKAGE_ARCH = "${BUILD_ARCH}"
 COMPATIBLE_HOST = "(x86_64.*-linux)"
