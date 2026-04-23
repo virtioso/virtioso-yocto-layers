@@ -12,6 +12,7 @@ PR = "r1"
 SRC_URI = "\
     file://qemu-rnd-helper \
     file://qemu-rnd-helper-gui \
+    file://uservmctl \
     "
 
 S = "${UNPACKDIR}"
@@ -29,12 +30,13 @@ do_install() {
     install -m 0755 \
         ${UNPACKDIR}/qemu-rnd-helper \
         ${UNPACKDIR}/qemu-rnd-helper-gui \
+        ${UNPACKDIR}/uservmctl \
         ${D}${bindir}
 }
 
 PACKAGES = "${PN} ${PN}-gui"
 
-FILES:${PN} = "${bindir}/qemu-rnd-helper"
+FILES:${PN} = "${bindir}/qemu-rnd-helper ${bindir}/uservmctl"
 RDEPENDS:${PN} = "\
     busybox \
     qemu \

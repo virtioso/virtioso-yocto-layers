@@ -3,4 +3,5 @@ startup_message off
 defscrollback 5000
 
 screen -t BASH /bin/sh
-screen -t USERVM /usr/bin/qemu-rnd-helper
+screen -t USERVM-STATUS /bin/sh -lc '/usr/bin/uservmctl start; while :; do /usr/bin/uservmctl status; sleep 2; done'
+screen -t USERVM-LOG /bin/sh -lc 'exec /usr/bin/uservmctl logs -f'

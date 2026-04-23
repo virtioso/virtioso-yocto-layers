@@ -1,0 +1,191 @@
+#!/bin/sh
+
+set -eu
+
+STATE_DIR="${USERVM_STATE_DIR:-/run/uservm}"
+LOG_DIR="${USERVM_LOG_DIR:-/var/log/uservm}"
+LOG_PATH="${USERVM_LOG_PATH:-${LOG_DIR}/vm1-console.log}"
+PID_PATH="${USERVM_PID_PATH:-${STATE_DIR}/vm1-supervisor.pid}"
+STARTED_AT_PATH="${USERVM_STARTED_AT_PATH:-${STATE_DIR}/vm1-started-at}"
+SHARED_DIR="${USERVM_SHARED_DIR:-${GUEST_SHARED:-$HOME/.local/share/virt/shared}}"
+READY_JSON="${USERVM_READY_JSON:-${SHARED_DIR}/uservm-ready.json}"
+READY_MARKER="${USERVM_READY_MARKER:-USERVM_READY version=1}"
+READY_FALLBACK_PATTERN="${USERVM_READY_FALLBACK_PATTERN:-login:}"
+READY_TIMEOUT="${USERVM_WAIT_READY_TIMEOUT_SEC:-120}"
+USERVM_HELPER="${USERVM_HELPER:-/usr/bin/qemu-rnd-helper}"
+
+usage() {
+    cat <<EOF
+Manage the nested user VM lifecycle from driver-vm.
+
+usage: $0 <start|status|wait-ready|stop|logs> [args]
+
+commands:
+  start                Launch user-vm detached via qemu-rnd-helper
+  status               Print lifecycle status and key paths
+  wait-ready [sec]     Wait until readiness signal appears
+  stop                 Stop the managed launcher and nested QEMU
+  logs [-f]            Show or follow the managed console log
+EOF
+}
+
+ensure_paths() {
+    mkdir -p "${STATE_DIR}" "${LOG_DIR}" "${SHARED_DIR}"
+}
+
+current_pid() {
+    if [ -f "${PID_PATH}" ]; then
+        cat "${PID_PATH}"
+    fi
+}
+
+is_running() {
+    pid="$(current_pid || true)"
+    if [ -z "${pid}" ]; then
+        return 1
+    fi
+    kill -0 "${pid}" >/dev/null 2>&1
+}
+
+ready_from_console() {
+    if [ ! -f "${LOG_PATH}" ]; then
+        return 1
+    fi
+    if [ -n "${READY_MARKER}" ] && grep -Fq "${READY_MARKER}" "${LOG_PATH}"; then
+        return 0
+    fi
+    if [ -n "${READY_FALLBACK_PATTERN}" ] && grep -Eq "${READY_FALLBACK_PATTERN}" "${LOG_PATH}"; then
+        return 0
+    fi
+    return 1
+}
+
+is_ready() {
+    if [ -f "${READY_JSON}" ]; then
+        return 0
+    fi
+    ready_from_console
+}
+
+print_status() {
+    pid="$(current_pid || true)"
+    status="stopped"
+    if is_running; then
+        if is_ready; then
+            status="ready"
+        else
+            status="running"
+        fi
+    elif [ -n "${pid}" ] && [ -f "${PID_PATH}" ]; then
+        status="exited"
+    fi
+
+    printf 'status=%s\n' "${status}"
+    printf 'pid=%s\n' "${pid:-}"
+    printf 'log=%s\n' "${LOG_PATH}"
+    printf 'ready_json=%s\n' "${READY_JSON}"
+    if [ -f "${STARTED_AT_PATH}" ]; then
+        printf 'started_at=%s\n' "$(cat "${STARTED_AT_PATH}")"
+    fi
+}
+
+cmd_start() {
+    ensure_paths
+    if is_running; then
+        print_status
+        exit 0
+    fi
+
+    rm -f "${PID_PATH}" "${READY_JSON}"
+    : > "${LOG_PATH}"
+    date '+%Y-%m-%dT%H:%M:%S%z' > "${STARTED_AT_PATH}"
+
+    (
+        exec env QEMU_CHARDEV_MODE="${QEMU_CHARDEV_MODE:-stdio_console}" "${USERVM_HELPER}"
+    ) >>"${LOG_PATH}" 2>&1 </dev/null &
+
+    pid="$!"
+    printf '%s\n' "${pid}" > "${PID_PATH}"
+    print_status
+}
+
+cmd_wait_ready() {
+    timeout="${1:-${READY_TIMEOUT}}"
+    while [ "${timeout}" -gt 0 ]; do
+        if is_ready; then
+            print_status
+            exit 0
+        fi
+        if ! is_running; then
+            print_status
+            exit 1
+        fi
+        sleep 1
+        timeout=$((timeout - 1))
+    done
+    print_status
+    exit 1
+}
+
+cmd_stop() {
+    pid="$(current_pid || true)"
+    if [ -z "${pid}" ]; then
+        print_status
+        exit 0
+    fi
+
+    if kill -0 "${pid}" >/dev/null 2>&1; then
+        kill "${pid}" >/dev/null 2>&1 || true
+        tries=10
+        while [ "${tries}" -gt 0 ] && kill -0 "${pid}" >/dev/null 2>&1; do
+            sleep 1
+            tries=$((tries - 1))
+        done
+        if kill -0 "${pid}" >/dev/null 2>&1; then
+            kill -KILL "${pid}" >/dev/null 2>&1 || true
+        fi
+    fi
+
+    rm -f "${PID_PATH}"
+    print_status
+}
+
+cmd_logs() {
+    ensure_paths
+    : > "${LOG_PATH}"
+    if [ "${1:-}" = "-f" ]; then
+        exec tail -n +1 -f "${LOG_PATH}"
+    fi
+    exec cat "${LOG_PATH}"
+}
+
+cmd="${1:-}"
+case "${cmd}" in
+    start)
+        shift
+        cmd_start "$@"
+        ;;
+    status)
+        shift
+        print_status
+        ;;
+    wait-ready)
+        shift
+        cmd_wait_ready "$@"
+        ;;
+    stop)
+        shift
+        cmd_stop
+        ;;
+    logs)
+        shift
+        cmd_logs "$@"
+        ;;
+    -h|--help|help|"")
+        usage
+        ;;
+    *)
+        usage 1>&2
+        exit 1
+        ;;
+esac

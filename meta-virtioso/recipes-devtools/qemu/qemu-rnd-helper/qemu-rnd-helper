@@ -218,14 +218,19 @@ esac
 heartbeat_pid=""
 qemu_pid=""
 
-cleanup_bridge() {
+cleanup_runtime() {
     if [ -n "$heartbeat_pid" ]; then
         kill "$heartbeat_pid" >/dev/null 2>&1 || true
         wait "$heartbeat_pid" >/dev/null 2>&1 || true
         heartbeat_pid=""
     fi
+    if [ -n "$qemu_pid" ]; then
+        kill "$qemu_pid" >/dev/null 2>&1 || true
+        wait "$qemu_pid" >/dev/null 2>&1 || true
+        qemu_pid=""
+    fi
 }
-trap cleanup_bridge EXIT INT TERM
+trap cleanup_runtime EXIT INT TERM
 
 ensure_sel4_bridge_dev() {
     major=""
@@ -359,6 +364,6 @@ fi
 
 wait "$qemu_pid"
 qemu_rc="$?"
-cleanup_bridge
+cleanup_runtime
 vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_EXIT" "$VMID" "$qemu_rc" 0 0
 exit "$qemu_rc"
