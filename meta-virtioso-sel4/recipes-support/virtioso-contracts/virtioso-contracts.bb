@@ -1,7 +1,7 @@
 SUMMARY = "Virtioso shared RPC and trace contract headers"
 SECTION = "devel"
 LICENSE = "Apache-2.0"
-LIC_FILES_CHKSUM = "file://README.md;md5=a0d6ffbcc4ea5873911526d6ee523af9"
+LIC_FILES_CHKSUM = "file://README.md;md5=1ed0db3861888147e5ba0c3b824e2cd4"
 
 VIRTIOSO_CONTRACTS_LOCAL_SRC = "${VIRTIOSO_LOCAL_SOURCES_DIR}/virtioso-contracts"
 SRC_URI = "file://${VIRTIOSO_CONTRACTS_LOCAL_SRC}/;subdir=git"
@@ -28,6 +28,7 @@ do_install() {
     install -m 0644 ${S}/include/virtioso/backend/pci.h ${D}${includedir}/virtioso/backend/
     install -m 0644 ${S}/include/virtioso/rpc/rpc.h ${D}${includedir}/virtioso/rpc/
     install -m 0644 ${S}/include/virtioso/rpc/rpc_queue.h ${D}${includedir}/virtioso/rpc/
+    install -m 0644 ${S}/include/virtioso/trace/bridge.h ${D}${includedir}/virtioso/trace/
     install -m 0644 ${S}/include/virtioso/trace/stream.h ${D}${includedir}/virtioso/trace/
     install -m 0644 ${S}/include/virtioso/trace/trace.h ${D}${includedir}/virtioso/trace/
 }
