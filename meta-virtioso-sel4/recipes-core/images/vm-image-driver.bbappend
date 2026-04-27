@@ -7,6 +7,7 @@ inherit vm-guest-image
 
 IMAGE_INSTALL += "\
     kernel-module-sel4-virt \
+    kernel-module-vio-trace \
     "
 
 set_driver_console_getty() {
