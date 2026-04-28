@@ -82,6 +82,13 @@ print_status() {
 
     printf 'status=%s\n' "${status}"
     printf 'pid=%s\n' "${pid:-}"
+    if [ -n "${pid}" ] && [ -r "/proc/${pid}/task/${pid}/children" ]; then
+        printf 'children=%s\n' "$(cat "/proc/${pid}/task/${pid}/children")"
+    fi
+    if [ -n "${pid}" ] && [ -r "/proc/${pid}/stat" ]; then
+        set -- $(cat "/proc/${pid}/stat")
+        printf 'pid_state=%s\n' "${3:-}"
+    fi
     printf 'log=%s\n' "${LOG_PATH}"
     printf 'ready_json=%s\n' "${READY_JSON}"
     if [ -f "${STARTED_AT_PATH}" ]; then

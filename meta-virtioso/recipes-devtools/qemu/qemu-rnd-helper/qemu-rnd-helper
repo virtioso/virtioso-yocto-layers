@@ -229,11 +229,13 @@ qemu_pid=""
 
 cleanup_runtime() {
     if [ -n "$heartbeat_pid" ]; then
+        echo "QEMU cleanup: stopping heartbeat pid=${heartbeat_pid}" 1>&2
         kill "$heartbeat_pid" >/dev/null 2>&1 || true
         wait "$heartbeat_pid" >/dev/null 2>&1 || true
         heartbeat_pid=""
     fi
     if [ -n "$qemu_pid" ]; then
+        echo "QEMU cleanup: stopping qemu pid=${qemu_pid}" 1>&2
         kill "$qemu_pid" >/dev/null 2>&1 || true
         wait "$qemu_pid" >/dev/null 2>&1 || true
         qemu_pid=""
@@ -359,6 +361,7 @@ printf '%s\n' "QEMU argv: /usr/bin/qemu-system-aarch64 -echr 0x14 --accel ${ACCE
     ${QEMU_APPEND_BOOTARGS:+-append "${QEMU_APPEND_BOOTARGS}"} \
     `# that's it!` &
 qemu_pid="$!"
+echo "QEMU child started: pid=${qemu_pid}" 1>&2
 
 # TEMPORARY: tracing disabled.
 # vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_LAUNCH" "$VMID" 0 0 0
@@ -379,6 +382,7 @@ qemu_pid="$!"
 
 wait "$qemu_pid"
 qemu_rc="$?"
+echo "QEMU child exited: pid=${qemu_pid} rc=${qemu_rc}" 1>&2
 cleanup_runtime
 # TEMPORARY: tracing disabled.
 # vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_EXIT" "$VMID" "$qemu_rc" 0 0
