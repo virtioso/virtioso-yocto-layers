@@ -9,6 +9,10 @@ EOF
     exit 0
 fi
 
+# TEMPORARY: disable tracing.
+# Keep the old tracing code commented out below so it can be restored after
+# the VM1/QEMU boot path is debugged without the vio_trace dependency.
+: <<'TEMPORARY_DISABLE_TRACING_DEFINITIONS'
 # Hyp-ftrace guest stream bridge (best-effort, no-op if devmem is unavailable)
 HYP_FTRACE_BASE=0x0F010000
 HYP_FTRACE_CMD=$((HYP_FTRACE_BASE + 0x00))
@@ -77,6 +81,15 @@ vio_trace_ready() {
         return 0
     fi
     return 1
+}
+TEMPORARY_DISABLE_TRACING_DEFINITIONS
+
+vio_trace_guest_emit() {
+    return 0
+}
+
+vio_trace_ready() {
+    return 0
 }
 
 if test "x${VMID}" = "x"; then
@@ -165,7 +178,7 @@ GUEST_MEMSZ=${GUEST_MEMSZ:-256}
 if test "x${ACCEL}" = "xsel4"; then
     if [ "$SEL4_DIRECT_DELEGATION" = "1" ]; then
         if [ -d /sys/module/sel4_virt ]; then
-            echo 1 > /sys/module/sel4_virt/parameters/direct_delegation
+            echo 1 > /sys/module/sel4_virt/parameters/direct_delegation 2>/dev/null || true
         else
             modprobe sel4_virt direct_delegation=1
         fi
@@ -173,12 +186,8 @@ if test "x${ACCEL}" = "xsel4"; then
     else
         modprobe sel4_virt
     fi
-    if vio_trace_ready; then
-        echo "vio_trace ready"
-    else
-        echo "ERROR: vio_trace not ready"
-        exit 1
-    fi
+    # TEMPORARY: disable tracing readiness requirement.
+    echo "TEMPORARY: vio_trace disabled"
 else
     # using something else, let's default to KVM
     QEMU_APPEND_BOOTARGS="${QEMU_APPEND_BOOTARGS} console=hvc0 root=/dev/vda"
@@ -232,6 +241,7 @@ cleanup_runtime() {
 }
 trap cleanup_runtime EXIT INT TERM
 
+: <<'TEMPORARY_DISABLE_TRACING_BRIDGE'
 ensure_sel4_bridge_dev() {
     major=""
     if [ -c /dev/sel4 ] && [ -r /dev/sel4 ] && [ -w /dev/sel4 ]; then
@@ -316,6 +326,9 @@ if [ "$sel4_bridge_wait_s" -eq 0 ]; then
     echo "VIO_TRACE_DIAG: /dev/sel4 bridge unavailable after wait"
     vio_trace_diag_dump
 fi
+TEMPORARY_DISABLE_TRACING_BRIDGE
+
+echo "TEMPORARY: tracing bridge diagnostics disabled"
 
 printf '%s\n' "QEMU argv: /usr/bin/qemu-system-aarch64 -echr 0x14 --accel ${ACCEL} -M virt -m ${GUEST_MEMSZ}m -device virtio-blk-pci,drive=drive0,id=virtblk0,disable-legacy=on,iommu_platform=on${GUEST_DEV_ARGS_APPEND} -drive format=qcow2,file=${GUEST_IMG},if=none,id=drive0 -virtfs local,path=${GUEST_SHARED},mount_tag=shared,security_model=mapped-xattr -chardev ringbuf,id=debug,size=64K ${QEMU_CHARDEV_ARGS} ${QEMU_MONITOR_ARGS} -device virtio-serial-pci,disable-legacy=on,iommu_platform=on${GUEST_DEV_ARGS_APPEND} ${QEMU_VIRTCONSOLE_ARGS} -serial none ${QEMU_EXTRA_ARGS} ${QEMU_APPEND_BOOTARGS:+-append \"${QEMU_APPEND_BOOTARGS}\"}"
 
@@ -347,23 +360,26 @@ printf '%s\n' "QEMU argv: /usr/bin/qemu-system-aarch64 -echr 0x14 --accel ${ACCE
     `# that's it!` &
 qemu_pid="$!"
 
-vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_LAUNCH" "$VMID" 0 0 0
+# TEMPORARY: tracing disabled.
+# vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_LAUNCH" "$VMID" 0 0 0
 
-if [ "${VIO_TRACE_VM1_BRIDGE:-1}" = "1" ]; then
-    (
-        seq=0
-        hb_sec="${VIO_TRACE_VM1_HEARTBEAT_SEC:-2}"
-        while kill -0 "$qemu_pid" >/dev/null 2>&1; do
-            sleep "$hb_sec"
-            seq=$((seq + 1))
-            vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_HEARTBEAT" "$VMID" "$seq" 0 0
-        done
-    ) &
-    heartbeat_pid="$!"
-fi
+# TEMPORARY: tracing heartbeat bridge disabled.
+# if [ "${VIO_TRACE_VM1_BRIDGE:-1}" = "1" ]; then
+#     (
+#         seq=0
+#         hb_sec="${VIO_TRACE_VM1_HEARTBEAT_SEC:-2}"
+#         while kill -0 "$qemu_pid" >/dev/null 2>&1; do
+#             sleep "$hb_sec"
+#             seq=$((seq + 1))
+#             vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_HEARTBEAT" "$VMID" "$seq" 0 0
+#         done
+#     ) &
+#     heartbeat_pid="$!"
+# fi
 
 wait "$qemu_pid"
 qemu_rc="$?"
 cleanup_runtime
-vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_EXIT" "$VMID" "$qemu_rc" 0 0
+# TEMPORARY: tracing disabled.
+# vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_EXIT" "$VMID" "$qemu_rc" 0 0
 exit "$qemu_rc"
