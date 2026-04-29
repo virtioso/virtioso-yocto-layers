@@ -1,0 +1,8 @@
+#!/bin/sh
+
+echo "VIRTIOSO_DIAG_INIT: start pid=$$"
+echo "VIRTIOSO_DIAG_INIT: cmdline=$(cat /proc/cmdline 2>/dev/null || true)"
+echo "VIRTIOSO_DIAG_INIT: console=$(ls -l /dev/console 2>&1 || true)"
+echo "VIRTIOSO_DIAG_INIT: ttyAMA0=$(ls -l /dev/ttyAMA0 2>&1 || true)"
+echo "VIRTIOSO_DIAG_INIT: exec /sbin/init.sysvinit"
+exec /sbin/init.sysvinit
