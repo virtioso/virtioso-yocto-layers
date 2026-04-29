@@ -9,7 +9,7 @@ SERIAL_CONSOLES:vm-jetson-agx-orin = "115200;ttyAMA0"
 
 install_orin_user_diag_init() {
     install -d ${IMAGE_ROOTFS}${base_sbindir}
-    install -m 0755 ${THISDIR}/${PN}/virtioso-diag-init \
+    install -m 0755 ${TOPDIR}/../virtioso-yocto-layers/meta-virtioso-sel4/recipes-core/images/${PN}/virtioso-diag-init \
         ${IMAGE_ROOTFS}${base_sbindir}/virtioso-diag-init
 }
 
