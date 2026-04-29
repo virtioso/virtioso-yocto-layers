@@ -13,15 +13,28 @@ echo "VIRTIOSO_DIAG_INIT: cmdline=$(cat /proc/cmdline 2>/dev/null || true)"
 echo "VIRTIOSO_DIAG_INIT: mounts=$(cat /proc/mounts 2>/dev/null | tr '\n' ';' || true)"
 echo "VIRTIOSO_DIAG_INIT: console=$(ls -l /dev/console 2>&1 || true)"
 echo "VIRTIOSO_DIAG_INIT: ttyAMA0=$(ls -l /dev/ttyAMA0 2>&1 || true)"
-echo "VIRTIOSO_DIAG_INIT: run rcS with tracing"
-PS4='VIRTIOSO_RCS_TRACE: '
-/bin/sh -x /etc/init.d/rcS >/dev/kmsg 2>&1
-rc=$?
-echo "VIRTIOSO_DIAG_INIT: rcS exited rc=$rc"
-echo "VIRTIOSO_DIAG_INIT: run rc 5 with tracing"
-/bin/sh -x /etc/init.d/rc 5 >/dev/kmsg 2>&1
-rc=$?
-echo "VIRTIOSO_DIAG_INIT: rc5 exited rc=$rc"
+
+run_rc_dir() {
+    level="$1"
+    runlevel="$level"
+    previous="${previous:-N}"
+    prevlevel="$previous"
+    export runlevel previous prevlevel
+
+    for script in /etc/rc${level}.d/S*; do
+        [ -e "$script" ] || continue
+        echo "VIRTIOSO_DIAG_INIT: start $script"
+        "$script" start </dev/null >/dev/null 2>&1
+        rc=$?
+        echo "VIRTIOSO_DIAG_INIT: done $script rc=$rc"
+    done
+}
+
+echo "VIRTIOSO_DIAG_INIT: run rcS scripts"
+run_rc_dir S
+previous=S
+echo "VIRTIOSO_DIAG_INIT: run rc5 scripts"
+run_rc_dir 5
 echo "VIRTIOSO_DIAG_INIT: exec getty ttyAMA0"
 exec >/dev/console 2>&1
 exec /sbin/getty -L 115200 ttyAMA0 vt102
