@@ -25,7 +25,21 @@ QEMU_SEL4_DEPS = ""
 QEMU_SEL4_DEPS:class-target = "kernel-module-sel4-virt virtioso-contracts"
 DEPENDS += "${QEMU_SEL4_DEPS}"
 
-CFLAGS:append:class-target = " -I${STAGING_INCDIR}"
+CFLAGS:append:class-target = " -I${STAGING_INCDIR} ${QEMU_SEL4_RPC_WAIT_THREAD_CFLAGS}"
+
+python __anonymous () {
+    import os
+    layers_root = d.getVar("LAYERS_ROOT") or os.path.abspath(os.path.join(d.getVar("TOPDIR"), ".."))
+    config_file = os.path.abspath(os.path.join(layers_root, "..", ".config"))
+    cflags = ""
+    if os.path.exists(config_file):
+        with open(config_file, encoding="utf-8") as config:
+            for line in config:
+                if line.strip() == "CONFIG_QEMU_SEL4_RPC_WAIT_THREAD=y":
+                    cflags = "-DVIRTIO_QEMU_SEL4_RPC_WAIT_THREAD=1"
+                    break
+    d.setVar("QEMU_SEL4_RPC_WAIT_THREAD_CFLAGS", cflags)
+}
 
 PACKAGECONFIG[sel4] = "--enable-sel4,--disable-sel4,,"
 PACKAGECONFIG:class-target = " \
