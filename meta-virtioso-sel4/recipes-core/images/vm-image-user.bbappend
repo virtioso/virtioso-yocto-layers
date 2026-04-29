@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
+FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
+
 SRC_URI += "file://virtioso-diag-init"
 
 SERIAL_CONSOLES = "115200;hvc0"
