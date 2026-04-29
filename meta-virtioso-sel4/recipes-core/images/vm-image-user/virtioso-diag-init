@@ -1,28 +1,27 @@
 #!/bin/sh
 
-echo "VIRTIOSO_DIAG_INIT: start pid=$$"
-
 [ -d /proc/1 ] || mount -t proc proc /proc 2>/dev/null || true
 [ -e /sys/class ] || mount -t sysfs sysfs /sys 2>/dev/null || true
 [ -e /dev/console ] || mount -n -t devtmpfs devtmpfs /dev 2>/dev/null || true
 [ -d /dev/pts ] || mkdir -p /dev/pts
 mountpoint -q /dev/pts 2>/dev/null || mount -t devpts devpts /dev/pts 2>/dev/null || true
-dmesg -n 1 2>/dev/null || true
 
-exec </dev/console >/dev/console 2>&1
+exec </dev/console >/dev/kmsg 2>&1
 
+echo "VIRTIOSO_DIAG_INIT: start pid=$$"
 echo "VIRTIOSO_DIAG_INIT: cmdline=$(cat /proc/cmdline 2>/dev/null || true)"
 echo "VIRTIOSO_DIAG_INIT: mounts=$(cat /proc/mounts 2>/dev/null | tr '\n' ';' || true)"
 echo "VIRTIOSO_DIAG_INIT: console=$(ls -l /dev/console 2>&1 || true)"
 echo "VIRTIOSO_DIAG_INIT: ttyAMA0=$(ls -l /dev/ttyAMA0 2>&1 || true)"
 echo "VIRTIOSO_DIAG_INIT: run rcS with tracing"
 PS4='VIRTIOSO_RCS_TRACE: '
-/bin/sh -x /etc/init.d/rcS
+/bin/sh -x /etc/init.d/rcS >/dev/kmsg 2>&1
 rc=$?
 echo "VIRTIOSO_DIAG_INIT: rcS exited rc=$rc"
 echo "VIRTIOSO_DIAG_INIT: run rc 5 with tracing"
-/bin/sh -x /etc/init.d/rc 5
+/bin/sh -x /etc/init.d/rc 5 >/dev/kmsg 2>&1
 rc=$?
 echo "VIRTIOSO_DIAG_INIT: rc5 exited rc=$rc"
 echo "VIRTIOSO_DIAG_INIT: exec getty ttyAMA0"
+exec >/dev/console 2>&1
 exec /sbin/getty -L 115200 ttyAMA0 vt102
