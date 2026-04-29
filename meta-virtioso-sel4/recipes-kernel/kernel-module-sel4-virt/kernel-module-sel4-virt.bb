@@ -20,7 +20,21 @@ python () {
         bb.fatal("Missing required local source directory: %s" % src)
 }
 
-EXTRA_OEMAKE += "INSTALL_HDR_PATH=${D} CONTRACTS_INCLUDE_DIR=${STAGING_INCDIR}"
+python __anonymous () {
+    import os
+    layers_root = d.getVar("LAYERS_ROOT") or os.path.abspath(os.path.join(d.getVar("TOPDIR"), ".."))
+    config_file = os.path.abspath(os.path.join(layers_root, "..", ".config"))
+    enabled = "0"
+    if os.path.exists(config_file):
+        with open(config_file, encoding="utf-8") as config:
+            for line in config:
+                if line.strip() == "CONFIG_VIRTIO_VM_DEBUG=y":
+                    enabled = "1"
+                    break
+    d.setVar("VIRTIO_VM_DEBUG", enabled)
+}
+
+EXTRA_OEMAKE += "INSTALL_HDR_PATH=${D} CONTRACTS_INCLUDE_DIR=${STAGING_INCDIR} VIRTIO_VM_DEBUG=${VIRTIO_VM_DEBUG}"
 MODULES_INSTALL_TARGET = "modules_install headers_install"
 MODULE_NAME = "sel4_virt"
 
