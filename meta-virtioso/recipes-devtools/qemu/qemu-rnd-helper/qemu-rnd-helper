@@ -9,89 +9,6 @@ EOF
     exit 0
 fi
 
-# TEMPORARY: disable tracing.
-# Keep the old tracing code commented out below so it can be restored after
-# the VM1/QEMU boot path is debugged without the vio_trace dependency.
-: <<'TEMPORARY_DISABLE_TRACING_DEFINITIONS'
-# Hyp-ftrace guest stream bridge (best-effort, no-op if devmem is unavailable)
-HYP_FTRACE_BASE=0x0F010000
-HYP_FTRACE_CMD=$((HYP_FTRACE_BASE + 0x00))
-VIO_TRACE_GUEST_REG_SOURCE_ID=$((HYP_FTRACE_BASE + 0x18))
-VIO_TRACE_GUEST_REG_FLAGS=$((HYP_FTRACE_BASE + 0x1C))
-VIO_TRACE_GUEST_REG_ARG0=$((HYP_FTRACE_BASE + 0x20))
-VIO_TRACE_GUEST_REG_ARG1=$((HYP_FTRACE_BASE + 0x24))
-VIO_TRACE_GUEST_REG_ARG2=$((HYP_FTRACE_BASE + 0x28))
-VIO_TRACE_GUEST_REG_ARG3=$((HYP_FTRACE_BASE + 0x2C))
-CMD_VIO_TRACE_GUEST_EMIT=0x20
-
-# VM0 EL0 trace source/producer IDs and helper lifecycle events
-VIO_TRACE_SRC_VM0_EL0=5
-VIO_TRACE_PROD_VM0_QEMU_SEL4_ACCEL=5
-VIO_TRACE_EV_VM0_QEMU_LAUNCH=26
-VIO_TRACE_EV_VM0_QEMU_HEARTBEAT=27
-VIO_TRACE_EV_VM0_QEMU_EXIT=28
-VIO_TRACE_FLAGS_VM0_QEMU_LAUNCH=$(((VIO_TRACE_PROD_VM0_QEMU_SEL4_ACCEL << 8) | VIO_TRACE_EV_VM0_QEMU_LAUNCH))
-VIO_TRACE_FLAGS_VM0_QEMU_HEARTBEAT=$(((VIO_TRACE_PROD_VM0_QEMU_SEL4_ACCEL << 8) | VIO_TRACE_EV_VM0_QEMU_HEARTBEAT))
-VIO_TRACE_FLAGS_VM0_QEMU_EXIT=$(((VIO_TRACE_PROD_VM0_QEMU_SEL4_ACCEL << 8) | VIO_TRACE_EV_VM0_QEMU_EXIT))
-
-vio_trace_write32() {
-    addr="$1"
-    value="$2"
-
-    if command -v busybox >/dev/null 2>&1; then
-        busybox devmem "$addr" 32 "$value" >/dev/null 2>&1 && return 0
-        busybox devmem2 "$addr" w "$value" >/dev/null 2>&1 && return 0
-    fi
-    if command -v devmem2 >/dev/null 2>&1; then
-        devmem2 "$addr" w "$value" >/dev/null 2>&1 && return 0
-    fi
-    if command -v devmem >/dev/null 2>&1; then
-        devmem "$addr" 32 "$value" >/dev/null 2>&1 && return 0
-    fi
-    return 1
-}
-
-vio_trace_guest_emit() {
-    source_id="$1"
-    flags="${2:-0}"
-    arg0="${3:-0}"
-    arg1="${4:-0}"
-    arg2="${5:-0}"
-    arg3="${6:-0}"
-
-    vio_trace_write32 "$VIO_TRACE_GUEST_REG_SOURCE_ID" "$source_id" || return 0
-    vio_trace_write32 "$VIO_TRACE_GUEST_REG_FLAGS" "$flags" || return 0
-    vio_trace_write32 "$VIO_TRACE_GUEST_REG_ARG0" "$arg0" || return 0
-    vio_trace_write32 "$VIO_TRACE_GUEST_REG_ARG1" "$arg1" || return 0
-    vio_trace_write32 "$VIO_TRACE_GUEST_REG_ARG2" "$arg2" || return 0
-    vio_trace_write32 "$VIO_TRACE_GUEST_REG_ARG3" "$arg3" || return 0
-    vio_trace_write32 "$HYP_FTRACE_CMD" "$CMD_VIO_TRACE_GUEST_EMIT" || return 0
-
-    return 0
-}
-
-vio_trace_ready() {
-    if grep '^vio_trace ' /proc/modules >/dev/null 2>&1; then
-        return 0
-    fi
-    if [ -c /dev/vio_trace ]; then
-        return 0
-    fi
-    if [ -d /sys/bus/platform/drivers/vio_trace ]; then
-        return 0
-    fi
-    return 1
-}
-TEMPORARY_DISABLE_TRACING_DEFINITIONS
-
-vio_trace_guest_emit() {
-    return 0
-}
-
-vio_trace_ready() {
-    return 0
-}
-
 if test "x${VMID}" = "x"; then
     VMID=1
     echo "VMID not specified, defaulting to ${VMID}"
@@ -186,8 +103,6 @@ if test "x${ACCEL}" = "xsel4"; then
     else
         modprobe sel4_virt
     fi
-    # TEMPORARY: disable tracing readiness requirement.
-    echo "TEMPORARY: vio_trace disabled"
 else
     # using something else, let's default to KVM
     QEMU_APPEND_BOOTARGS="${QEMU_APPEND_BOOTARGS} console=hvc0 root=/dev/vda"
@@ -224,16 +139,9 @@ case "${ROOTFS_STORAGE}" in
         ;;
 esac
 
-heartbeat_pid=""
 qemu_pid=""
 
 cleanup_runtime() {
-    if [ -n "$heartbeat_pid" ]; then
-        echo "QEMU cleanup: stopping heartbeat pid=${heartbeat_pid}" 1>&2
-        kill "$heartbeat_pid" >/dev/null 2>&1 || true
-        wait "$heartbeat_pid" >/dev/null 2>&1 || true
-        heartbeat_pid=""
-    fi
     if [ -n "$qemu_pid" ]; then
         echo "QEMU cleanup: stopping qemu pid=${qemu_pid}" 1>&2
         kill "$qemu_pid" >/dev/null 2>&1 || true
@@ -242,97 +150,6 @@ cleanup_runtime() {
     fi
 }
 trap cleanup_runtime EXIT INT TERM
-
-: <<'TEMPORARY_DISABLE_TRACING_BRIDGE'
-ensure_sel4_bridge_dev() {
-    major=""
-    if [ -c /dev/sel4 ] && [ -r /dev/sel4 ] && [ -w /dev/sel4 ]; then
-        return 0
-    fi
-
-    minor="$(awk '$2 == "sel4" { print $1; exit }' /proc/misc 2>/dev/null)"
-    if [ -n "$minor" ]; then
-        if [ ! -e /dev/sel4 ]; then
-            mknod /dev/sel4 c 10 "$minor" >/dev/null 2>&1 || true
-        fi
-        chmod 0660 /dev/sel4 >/dev/null 2>&1 || true
-    fi
-
-    if [ -z "$minor" ]; then
-        major="$(awk '$2 == "sel4" { print $1; exit }' /proc/devices 2>/dev/null)"
-        if [ -n "$major" ]; then
-            if [ ! -e /dev/sel4 ]; then
-                mknod /dev/sel4 c "$major" 0 >/dev/null 2>&1 || true
-            fi
-            chmod 0660 /dev/sel4 >/dev/null 2>&1 || true
-        fi
-    fi
-
-    [ -c /dev/sel4 ] && [ -r /dev/sel4 ] && [ -w /dev/sel4 ]
-}
-
-vio_trace_diag_dump() {
-    misc_line="$(awk '$2 == "sel4" { print; exit }' /proc/misc 2>/dev/null)"
-    if [ -n "$misc_line" ]; then
-        echo "VIO_TRACE_DIAG: /proc/misc sel4: $misc_line"
-    else
-        echo "VIO_TRACE_DIAG: /proc/misc sel4: missing"
-    fi
-
-    devices_line="$(awk '$2 == "sel4" { print; exit }' /proc/devices 2>/dev/null)"
-    if [ -n "$devices_line" ]; then
-        echo "VIO_TRACE_DIAG: /proc/devices sel4: $devices_line"
-    else
-        echo "VIO_TRACE_DIAG: /proc/devices sel4: missing"
-    fi
-
-    if [ -e /dev/sel4 ]; then
-        ls -l /dev/sel4 | sed 's/^/VIO_TRACE_DIAG: /'
-    else
-        echo "VIO_TRACE_DIAG: /dev/sel4 missing"
-    fi
-
-    if [ -d /sys/class/misc/sel4 ]; then
-        echo "VIO_TRACE_DIAG: /sys/class/misc/sel4 present"
-    else
-        echo "VIO_TRACE_DIAG: /sys/class/misc/sel4 missing"
-    fi
-
-    if [ -d /sys/module/vio_trace ]; then
-        echo "VIO_TRACE_DIAG: /sys/module/vio_trace present"
-    else
-        echo "VIO_TRACE_DIAG: /sys/module/vio_trace missing"
-    fi
-
-    if [ -d /sys/module/sel4_virt ]; then
-        echo "VIO_TRACE_DIAG: /sys/module/sel4_virt present"
-    else
-        echo "VIO_TRACE_DIAG: /sys/module/sel4_virt missing"
-    fi
-
-    echo "VIO_TRACE_DIAG: legacy sel4_tracebuffer node paths are retired; canonical bridge path is /dev/sel4"
-}
-
-sel4_bridge_wait_s="${VIO_TRACE_BRIDGE_WAIT_SEC:-10}"
-while [ "$sel4_bridge_wait_s" -gt 0 ]; do
-    if ensure_sel4_bridge_dev; then
-        echo "VIO_TRACE_DIAG: /dev/sel4 bridge ready"
-        vio_trace_diag_dump
-        break
-    fi
-    sleep 1
-    sel4_bridge_wait_s=$((sel4_bridge_wait_s - 1))
-done
-
-if [ "$sel4_bridge_wait_s" -eq 0 ]; then
-    echo "VIO_TRACE_DIAG: /dev/sel4 bridge unavailable after wait"
-    vio_trace_diag_dump
-fi
-TEMPORARY_DISABLE_TRACING_BRIDGE
-
-echo "TEMPORARY: tracing bridge diagnostics disabled"
-
-printf '%s\n' "QEMU argv: /usr/bin/qemu-system-aarch64 -echr 0x14 --accel ${ACCEL} -M virt -m ${GUEST_MEMSZ}m -device virtio-blk-pci,drive=drive0,id=virtblk0,disable-legacy=on,iommu_platform=on${GUEST_DEV_ARGS_APPEND} -drive format=qcow2,file=${GUEST_IMG},if=none,id=drive0 -virtfs local,path=${GUEST_SHARED},mount_tag=shared,security_model=mapped-xattr -chardev ringbuf,id=debug,size=64K ${QEMU_CHARDEV_ARGS} ${QEMU_MONITOR_ARGS} -device virtio-serial-pci,disable-legacy=on,iommu_platform=on${GUEST_DEV_ARGS_APPEND} ${QEMU_VIRTCONSOLE_ARGS} -serial none ${QEMU_EXTRA_ARGS} ${QEMU_APPEND_BOOTARGS:+-append \"${QEMU_APPEND_BOOTARGS}\"}"
 
 /usr/bin/qemu-system-aarch64 \
     `# minicom already uses ^A, change monitor escape to ^T` \
@@ -361,29 +178,8 @@ printf '%s\n' "QEMU argv: /usr/bin/qemu-system-aarch64 -echr 0x14 --accel ${ACCE
     ${QEMU_APPEND_BOOTARGS:+-append "${QEMU_APPEND_BOOTARGS}"} \
     `# that's it!` &
 qemu_pid="$!"
-echo "QEMU child started: pid=${qemu_pid}" 1>&2
-
-# TEMPORARY: tracing disabled.
-# vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_LAUNCH" "$VMID" 0 0 0
-
-# TEMPORARY: tracing heartbeat bridge disabled.
-# if [ "${VIO_TRACE_VM1_BRIDGE:-1}" = "1" ]; then
-#     (
-#         seq=0
-#         hb_sec="${VIO_TRACE_VM1_HEARTBEAT_SEC:-2}"
-#         while kill -0 "$qemu_pid" >/dev/null 2>&1; do
-#             sleep "$hb_sec"
-#             seq=$((seq + 1))
-#             vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_HEARTBEAT" "$VMID" "$seq" 0 0
-#         done
-#     ) &
-#     heartbeat_pid="$!"
-# fi
 
 wait "$qemu_pid"
 qemu_rc="$?"
-echo "QEMU child exited: pid=${qemu_pid} rc=${qemu_rc}" 1>&2
 cleanup_runtime
-# TEMPORARY: tracing disabled.
-# vio_trace_guest_emit "$VIO_TRACE_SRC_VM0_EL0" "$VIO_TRACE_FLAGS_VM0_QEMU_EXIT" "$VMID" "$qemu_rc" 0 0
 exit "$qemu_rc"
