@@ -19,7 +19,14 @@ set_orin_user_console_getty() {
         ${IMAGE_ROOTFS}${sysconfdir}/inittab
 }
 
+set_orin_user_9p_noauto() {
+    sed -i \
+        -e 's|^shared /mnt/shared    9p      trans=virtio,version=9p2000.L   0 0$|shared /mnt/shared    9p      noauto,trans=virtio,version=9p2000.L   0 0|' \
+        ${IMAGE_ROOTFS}${sysconfdir}/fstab
+}
+
 ROOTFS_POSTPROCESS_COMMAND:append:vm-jetson-agx-orin = " \
     install_orin_user_diag_init; \
     set_orin_user_console_getty; \
+    set_orin_user_9p_noauto; \
 "
