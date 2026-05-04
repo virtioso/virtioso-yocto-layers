@@ -16,3 +16,7 @@ IMAGE_INSTALL:append = " \
 IMAGE_FSTYPES += "cpio.gz"
 
 export IMAGE_BASENAME = "isengard-image-native"
+
+# Remove the .rootfs suffix so the deployed cpio matches the filename that
+# do_bundle_initramfs looks for (INITRAMFS_IMAGE_NAME = image-machine, no suffix).
+IMAGE_NAME_SUFFIX = ""
