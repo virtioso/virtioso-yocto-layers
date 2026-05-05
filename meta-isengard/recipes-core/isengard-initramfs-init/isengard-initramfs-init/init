@@ -97,9 +97,11 @@ if ! wait_for_block_device "$EMMC_PART" 50; then
     drop_to_shell
 fi
 
-# Mount stock Linux root partition read-only
+# Mount stock Linux root partition read-write so the isengard-rootfs.ext4
+# loop device can be writable (a loop device backed by a file on a ro
+# filesystem is forced ro by the kernel, which breaks orphan cleanup).
 echo "Mounting stock Linux root: ${EMMC_PART}"
-if ! mount -o ro "$EMMC_PART" /mnt/emmc; then
+if ! mount -o rw "$EMMC_PART" /mnt/emmc; then
     echo "ERROR: Failed to mount ${EMMC_PART}"
     drop_to_shell
 fi
@@ -149,6 +151,25 @@ else
     echo "ERROR: No init found in rootfs"
     drop_to_shell
 fi
+
+setup_eth0() {
+    count=0
+    echo "Waiting for eth0..."
+    while [ ! -e /sys/class/net/eth0 ] && [ $count -lt 50 ]; do
+        sleep 0.1
+        count=$((count + 1))
+    done
+    if [ ! -e /sys/class/net/eth0 ]; then
+        echo "eth0 not found, skipping network setup"
+        return
+    fi
+    echo "Configuring eth0 via DHCP..."
+    ip link set eth0 up
+    udhcpc -i eth0 -t 10 -T 3 -n 2>/dev/null || true
+    echo "Network setup done: $(ip addr show eth0 2>/dev/null | grep 'inet ')"
+}
+
+setup_eth0
 
 echo "Switching to isengard rootfs (init: ${INIT_PATH})"
 
