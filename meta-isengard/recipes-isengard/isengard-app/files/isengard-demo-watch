@@ -1,0 +1,35 @@
+#!/bin/sh
+# isengard-demo-watch: live Isengard snapshot dashboard (Ctrl-C to stop)
+#
+# Reads the FUSE object tree at /obj/isengard/ every 500 ms and prints
+# a one-line status showing the key semantic fields from isengard-core.
+#
+# Object paths defined in isengard-contracts/include/isengard/snapshot.h:
+#   /obj/isengard/runtime/sequence
+#   /obj/isengard/runtime/uptime_ms
+#   /obj/isengard/can/node_id
+#   /obj/isengard/can/status_word
+#   /obj/isengard/can/diagnostics/tx_err_count
+#   /obj/isengard/supply_voltage/millivolts
+
+OBJ=/obj/isengard
+
+if [ ! -d "$OBJ" ]; then
+    echo "error: $OBJ not found — run isengard-demo-start first" >&2
+    exit 1
+fi
+
+printf "%-8s  %-10s  %-10s  %-10s  %-8s  %-8s\n" \
+    SEQ UPTIME_MS NODE_ID STATUS_W SUPPLY_MV TX_ERR
+
+while true; do
+    SEQ=$(cat $OBJ/runtime/sequence              2>/dev/null || echo '?')
+    UPT=$(cat $OBJ/runtime/uptime_ms             2>/dev/null || echo '?')
+    NID=$(cat $OBJ/can/node_id                   2>/dev/null || echo '?')
+    SW=$( cat $OBJ/can/status_word               2>/dev/null || echo '?')
+    MV=$( cat $OBJ/supply_voltage/millivolts     2>/dev/null || echo '?')
+    TX=$( cat $OBJ/can/diagnostics/tx_err_count  2>/dev/null || echo '?')
+    printf "\r%-8s  %-10s  %-10s  %-10s  %-8s  %-8s" \
+        "$SEQ" "$UPT" "$NID" "$SW" "$MV" "$TX"
+    sleep 0.5
+done

@@ -11,6 +11,10 @@ IMAGE_INSTALL:append = " \
     iproute2 \
     kmod \
     kernel-modules \
+    isengard-app \
+    fuse3 \
+    kernel-module-vcan \
+    kernel-module-fuse \
     "
 
 export IMAGE_BASENAME = "isengard-rootfs"
