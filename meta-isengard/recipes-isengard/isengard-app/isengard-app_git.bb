@@ -25,12 +25,14 @@ do_compile() {
     F3C=$(pkg-config --cflags fuse3)
     F3L=$(pkg-config --libs fuse3)
     oe_runmake FUSE3_CFLAGS="${F3C}" FUSE3_LIBS="${F3L}"
+    oe_runmake snapshot-demo FUSE3_CFLAGS="${F3C}" FUSE3_LIBS="${F3L}"
 }
 
 do_install() {
     install -d ${D}${bindir}
-    install -m 0755 ${EXTERNALSRC}/build/isengard_app   ${D}${bindir}/isengard_app
-    install -m 0755 ${EXTERNALSRC}/build/isengard_objfs ${D}${bindir}/isengard_objfs
+    install -m 0755 ${EXTERNALSRC}/build/isengard_app                   ${D}${bindir}/isengard_app
+    install -m 0755 ${EXTERNALSRC}/build/isengard_objfs                 ${D}${bindir}/isengard_objfs
+    install -m 0755 ${EXTERNALSRC}/build/isengard_snapshot_memfd_demo   ${D}${bindir}/isengard_snapshot_memfd_demo
     install -m 0755 ${UNPACKDIR}/isengard-demo-start    ${D}${bindir}/isengard-demo-start
     install -m 0755 ${UNPACKDIR}/isengard-demo-watch    ${D}${bindir}/isengard-demo-watch
 }

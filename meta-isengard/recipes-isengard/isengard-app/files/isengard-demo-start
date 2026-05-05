@@ -14,14 +14,17 @@ ip link add dev vcan0 type vcan 2>/dev/null || true
 ip link set vcan0 up
 echo "vcan0 up"
 
+# FUSE kernel module
+modprobe fuse 2>/dev/null || true
+
 # CANopenNODE service + isengard-core
 isengard_app vcan0 &
-sleep 0.3
+sleep 0.5
 
-# FUSE snapshot object tree
+# FUSE snapshot object tree (memfd producer + objfs consumer launched together)
 mkdir -p /obj
-isengard_objfs /obj &
-sleep 0.3
+isengard_snapshot_memfd_demo --launch-objfs-updating /usr/bin/isengard_objfs /obj &
+sleep 0.5
 
 # CAN traffic generator (10 ms inter-frame gap)
 cangen vcan0 -g 10 &
