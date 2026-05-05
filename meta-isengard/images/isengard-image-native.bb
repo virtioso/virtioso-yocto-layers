@@ -19,4 +19,12 @@ IMAGE_INSTALL:append = " \
 
 EXTRA_IMAGE_FEATURES += "ssh-server-dropbear allow-root-login empty-root-password"
 
+install_authorized_keys() {
+    if [ -f "${HOME}/.ssh/id_rsa.pub" ]; then
+        install -d -m 0700 ${IMAGE_ROOTFS}/root/.ssh
+        install -m 0600 ${HOME}/.ssh/id_rsa.pub ${IMAGE_ROOTFS}/root/.ssh/authorized_keys
+    fi
+}
+ROOTFS_POSTPROCESS_COMMAND:append = " install_authorized_keys;"
+
 export IMAGE_BASENAME = "isengard-rootfs"
