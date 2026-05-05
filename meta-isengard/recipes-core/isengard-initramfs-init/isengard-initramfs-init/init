@@ -138,14 +138,17 @@ if ! mount -o rw "$LOOP_DEV" /newroot; then
     drop_to_shell
 fi
 
-# Verify init
-if [ ! -x /newroot/sbin/init ] && [ ! -x /newroot/init ]; then
-    echo "ERROR: No executable init found in rootfs"
+# Verify init — use -L (symlink present) || -f (regular file) so that
+# absolute symlinks (e.g. /sbin/init -> /lib/systemd/systemd) are accepted
+# even though their targets are not accessible from the initramfs root.
+if [ -L /newroot/sbin/init ] || [ -f /newroot/sbin/init ]; then
+    INIT_PATH="/sbin/init"
+elif [ -L /newroot/init ] || [ -f /newroot/init ]; then
+    INIT_PATH="/init"
+else
+    echo "ERROR: No init found in rootfs"
     drop_to_shell
 fi
-
-INIT_PATH="/sbin/init"
-[ -x /newroot/sbin/init ] || INIT_PATH="/init"
 
 echo "Switching to isengard rootfs (init: ${INIT_PATH})"
 
