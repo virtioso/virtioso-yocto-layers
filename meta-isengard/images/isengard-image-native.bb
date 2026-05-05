@@ -17,4 +17,6 @@ IMAGE_INSTALL:append = " \
     kernel-module-fuse \
     "
 
+EXTRA_IMAGE_FEATURES += "ssh-server-dropbear allow-root-login empty-root-password"
+
 export IMAGE_BASENAME = "isengard-rootfs"
