@@ -4,20 +4,7 @@
 # The accelerator allows QEMU to provide virtio device backends for VMs
 # running on the seL4 hypervisor.
 #
-# Source: https://github.com/virtioso/virtioso-qemu (branch: virtioso/9.2.0)
-#
-# QEMU 9.x API Changes:
-# ---------------------
-# In QEMU 9.x, the NIC initialization API changed. NICs are no longer
-# auto-created from nb_nics/nd_table. Instead, use explicit -device options:
-#
-# Old (QEMU 8.x):
-#   qemu-system-aarch64 -net nic,model=virtio -net user
-#
-# New (QEMU 9.x):
-#   qemu-system-aarch64 -device virtio-net-pci,netdev=net0 -netdev user,id=net0
-#
-# The seL4 virt machine has been updated to work with this change.
+# Source: https://github.com/virtioso/virtioso-qemu (branch: virtioso/10.2.0)
 
 QEMU_TARGETS = "aarch64 x86_64"
 

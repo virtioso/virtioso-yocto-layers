@@ -108,7 +108,7 @@ cmd_start() {
     date '+%Y-%m-%dT%H:%M:%S%z' > "${STARTED_AT_PATH}"
 
     (
-        exec env QEMU_CHARDEV_MODE="${QEMU_CHARDEV_MODE:-stdio_console}" "${USERVM_HELPER}"
+        exec env QEMU_CHARDEV_MODE="${QEMU_CHARDEV_MODE:-none_ringbuf}" "${USERVM_HELPER}"
     ) >>"${LOG_PATH}" 2>&1 </dev/null &
 
     pid="$!"

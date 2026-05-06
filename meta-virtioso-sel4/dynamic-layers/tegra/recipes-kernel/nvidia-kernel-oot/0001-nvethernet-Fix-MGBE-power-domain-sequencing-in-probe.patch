@@ -7,6 +7,8 @@ The MGBE ethernet driver accesses MAC registers during probe() before
 enabling runtime PM, causing the first hardware access to hang when the
 MGBE power domain is not already powered on.
 
+Upstream-Status: Pending [NVIDIA L4T bug]
+
 Signed-off-by: Hannu Lyytinen <hannu.lyytinen@unikie.com>
 ---
  .../ethernet/nvidia/nvethernet/ether_linux.c  | 25 ++++++++++++++++++-

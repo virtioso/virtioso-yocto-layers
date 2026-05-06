@@ -10,4 +10,4 @@
 
 FILESEXTRAPATHS:prepend := "${THISDIR}:"
 
-SRC_URI += "file://0002-nvethernet-Fix-NULL-pointer-in-of_get_mac_address.patch"
+SRC_URI += "file://0002-nvethernet-Fix-NULL-pointer-in-of_get_mac_address.patch;patchdir=nvidia-oot"
