@@ -37,6 +37,7 @@ do_install() {
     install -m 0755 ${UNPACKDIR}/isengard-demo-start        ${D}${bindir}/isengard-demo-start
     install -m 0755 ${UNPACKDIR}/isengard-demo-watch        ${D}${bindir}/isengard-demo-watch
     install -m 0755 ${UNPACKDIR}/isengard-demo-watch-rust   ${D}${bindir}/isengard-demo-watch-rust
+    # isengard_snapshot_watch is installed by the isengard-snapshot-watch recipe
 }
 
 RDEPENDS:${PN} = "fuse3 kernel-module-fuse can-utils"

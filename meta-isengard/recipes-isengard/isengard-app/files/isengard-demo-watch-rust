@@ -3,12 +3,13 @@
 # wrapper, reading directly from shared memory (no FUSE).
 #
 # Launches isengard_snapshot_memfd_demo in --launch-watch-looping mode, which
-# creates a demo snapshot region, publishes updates at 100 ms, and execs
-# isengard_snapshot_watch as a child process via the --fd-event protocol.
+# creates a 64-slot cross-process N-buffer shared memfd, publishes snapshots
+# at 100 ms intervals, and execs isengard_snapshot_watch as a child process
+# via the --fd-event protocol.
 #
-# The Rust binary reads from the shared-memory region directly using pread64
-# rather than reading from the FUSE /obj tree.  This demonstrates the
-# sources/isengard-rs SnapshotRegion API on real hardware.
+# The Rust binary mmaps the shared fd and reads via N-buffer pin_latest/unpin
+# on MAP_SHARED pages.  No seqlock, no pread64 — the N-buffer ctrl array in
+# shared memory is the only synchronisation primitive.
 
 exec isengard_snapshot_memfd_demo \
     --launch-watch-looping /usr/bin/isengard_snapshot_watch
