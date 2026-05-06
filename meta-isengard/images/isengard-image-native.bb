@@ -12,6 +12,7 @@ IMAGE_INSTALL:append = " \
     kmod \
     kernel-modules \
     isengard-app \
+    isengard-rs \
     fuse3 \
     kernel-module-vcan \
     kernel-module-fuse \

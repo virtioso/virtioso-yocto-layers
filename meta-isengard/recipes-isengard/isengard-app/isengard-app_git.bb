@@ -19,6 +19,7 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 SRC_URI = " \
     file://isengard-demo-start \
     file://isengard-demo-watch \
+    file://isengard-demo-watch-rust \
 "
 
 do_compile() {
@@ -33,8 +34,9 @@ do_install() {
     install -m 0755 ${EXTERNALSRC}/build/isengard_app                   ${D}${bindir}/isengard_app
     install -m 0755 ${EXTERNALSRC}/build/isengard_objfs                 ${D}${bindir}/isengard_objfs
     install -m 0755 ${EXTERNALSRC}/build/isengard_snapshot_memfd_demo   ${D}${bindir}/isengard_snapshot_memfd_demo
-    install -m 0755 ${UNPACKDIR}/isengard-demo-start    ${D}${bindir}/isengard-demo-start
-    install -m 0755 ${UNPACKDIR}/isengard-demo-watch    ${D}${bindir}/isengard-demo-watch
+    install -m 0755 ${UNPACKDIR}/isengard-demo-start        ${D}${bindir}/isengard-demo-start
+    install -m 0755 ${UNPACKDIR}/isengard-demo-watch        ${D}${bindir}/isengard-demo-watch
+    install -m 0755 ${UNPACKDIR}/isengard-demo-watch-rust   ${D}${bindir}/isengard-demo-watch-rust
 }
 
 RDEPENDS:${PN} = "fuse3 kernel-module-fuse can-utils"

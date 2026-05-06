@@ -1,0 +1,14 @@
+#!/bin/sh
+# isengard-demo-watch-rust: live Isengard snapshot dashboard using the Rust
+# wrapper, reading directly from shared memory (no FUSE).
+#
+# Launches isengard_snapshot_memfd_demo in --launch-watch-looping mode, which
+# creates a demo snapshot region, publishes updates at 100 ms, and execs
+# isengard_snapshot_watch as a child process via the --fd-event protocol.
+#
+# The Rust binary reads from the shared-memory region directly using pread64
+# rather than reading from the FUSE /obj tree.  This demonstrates the
+# sources/isengard-rs SnapshotRegion API on real hardware.
+
+exec isengard_snapshot_memfd_demo \
+    --launch-watch-looping /usr/bin/isengard_snapshot_watch
