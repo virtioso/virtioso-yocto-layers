@@ -8,7 +8,7 @@ inherit cargo externalsrc
 # Its path dependency `isengard = { path = "../../isengard-rs" }` resolves to
 # sources/isengard-rs, which cargo builds automatically — no separate
 # DEPENDS on isengard-rs is required.
-EXTERNALSRC = "${TOPDIR}/../../sources/isengard-app/isengard_snapshot_watch"
+EXTERNALSRC = "${TOPDIR}/../../sources/isengard-core/isengard-app/isengard_snapshot_watch"
 EXTERNALSRC_BUILD = "${EXTERNALSRC}"
 
 LICENSE = "Apache-2.0"

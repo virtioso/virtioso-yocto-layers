@@ -4,7 +4,7 @@
 
 inherit cargo externalsrc
 
-EXTERNALSRC = "${TOPDIR}/../../sources/isengard-rs"
+EXTERNALSRC = "${TOPDIR}/../../sources/isengard-core/isengard-rs"
 EXTERNALSRC_BUILD = "${EXTERNALSRC}"
 
 LICENSE = "Apache-2.0"

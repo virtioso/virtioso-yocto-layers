@@ -4,7 +4,7 @@
 
 inherit externalsrc pkgconfig
 
-EXTERNALSRC = "${TOPDIR}/../../sources/isengard-app"
+EXTERNALSRC = "${TOPDIR}/../../sources/isengard-core/isengard-app"
 EXTERNALSRC_BUILD = "${EXTERNALSRC}"
 
 LICENSE = "CLOSED"
