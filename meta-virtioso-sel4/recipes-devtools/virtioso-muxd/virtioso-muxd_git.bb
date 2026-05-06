@@ -23,11 +23,6 @@ require ${PN}-crates.inc
 SRC_URI += "file://virtioso-muxd.service"
 
 do_install:append() {
-    install -d ${D}${bindir}
-    install -m 0755 ${CARGO_TARGET_DIR}/${CARGO_BUILD_TARGET}/release/virtioso-muxd \
-        ${D}${bindir}/virtioso-muxd
-    install -m 0755 ${CARGO_TARGET_DIR}/${CARGO_BUILD_TARGET}/release/virtioso-mux-exec \
-        ${D}${bindir}/virtioso-mux-exec
     install -d ${D}${systemd_unitdir}/system
     install -m 0644 ${UNPACKDIR}/virtioso-muxd.service \
         ${D}${systemd_unitdir}/system/
