@@ -8,6 +8,11 @@
 BB_NUMBER_THREADS ?= "8"
 PARALLEL_MAKE ?= "-j 8"
 
+# Remove package work directories after successful build to reclaim disk space.
+# Each package's source + build tree is deleted once it's packaged; sstate-cache
+# preserves the result so incremental rebuilds remain fast.
+INHERIT += "rm_work"
+
 # Uncomment to enable the build history feature
 #INHERIT += "buildhistory"
 #BUILDHISTORY_COMMIT = "1"
