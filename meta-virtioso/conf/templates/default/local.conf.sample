@@ -2,9 +2,11 @@
 # Override here only if running outside the virtioso-build setup.
 #MACHINE ??= "qemux86-64"
 
-# Parallelism — tune to your host
-#BB_NUMBER_THREADS ?= "${@oe.utils.cpu_count()}"
-#PARALLEL_MAKE ?= "-j ${@oe.utils.cpu_count()}"
+# Parallelism — capped to prevent OOM on high-CPU-count hosts.
+# Rust crate builds can use 1-4 GB per rustc process; uncapped defaults
+# (cpu_count() x cpu_count()) saturate RAM on 32+ core machines.
+BB_NUMBER_THREADS ?= "8"
+PARALLEL_MAKE ?= "-j 8"
 
 # Uncomment to enable the build history feature
 #INHERIT += "buildhistory"
