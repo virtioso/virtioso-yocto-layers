@@ -4,13 +4,13 @@
 
 inherit cargo externalsrc cargo-update-recipe-crates
 
-EXTERNALSRC = "${TOPDIR}/../../sources/virtioso-muxd"
+EXTERNALSRC = "${TOPDIR}/../../sources/virtioso-mux/linux"
 EXTERNALSRC_BUILD = "${EXTERNALSRC}"
 
 CARGO_LOCK_SRC_DIR = "${EXTERNALSRC}"
 
 LICENSE = "Apache-2.0"
-LIC_FILES_CHKSUM = "file://${TOPDIR}/../../sources/virtioso-muxd/LICENSE;md5=0215f7e684a6a05e27d4cf5e15d9cfcf"
+LIC_FILES_CHKSUM = "file://${TOPDIR}/../../sources/virtioso-mux/linux/LICENSE;md5=0215f7e684a6a05e27d4cf5e15d9cfcf"
 SUMMARY = "virtioso-muxd: multiplexes named process streams over a single UART using the 0xfe frame protocol"
 
 PACKAGE_ARCH = "${MACHINE_ARCH}"
