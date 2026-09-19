@@ -10,8 +10,8 @@ DEPENDS += "virtioso-contracts"
 SEL4_VIRT_LOCAL_SRC = "${VIRTIOSO_LOCAL_SOURCES_DIR}/kmod-sel4-virt"
 SRC_URI = "file://${SEL4_VIRT_LOCAL_SRC}/;subdir=git"
 
-# Local directory unpack preserves absolute source path under ${WORKDIR}/git.
-S = "${WORKDIR}/git/${@d.getVar('SEL4_VIRT_LOCAL_SRC').lstrip('/')}"
+# Local directory unpack preserves absolute source path under ${UNPACKDIR}/git.
+S = "${UNPACKDIR}/git/${@d.getVar('SEL4_VIRT_LOCAL_SRC').lstrip('/')}"
 
 python () {
     import os

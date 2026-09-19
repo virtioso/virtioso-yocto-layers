@@ -1,13 +1,13 @@
 SUMMARY = "Virtioso shared RPC and trace contract headers"
 SECTION = "devel"
 LICENSE = "Apache-2.0"
-LIC_FILES_CHKSUM = "file://README.md;md5=1ed0db3861888147e5ba0c3b824e2cd4"
+LIC_FILES_CHKSUM = "file://LICENSE;md5=89aea4e17d99a7cacdbeed46a0096b10"
 
 VIRTIOSO_CONTRACTS_LOCAL_SRC = "${VIRTIOSO_LOCAL_SOURCES_DIR}/virtioso-contracts"
 SRC_URI = "file://${VIRTIOSO_CONTRACTS_LOCAL_SRC}/;subdir=git"
 
-# Local directory unpack preserves absolute source path under ${WORKDIR}/git.
-S = "${WORKDIR}/git/${@d.getVar('VIRTIOSO_CONTRACTS_LOCAL_SRC').lstrip('/')}"
+# Local directory unpack preserves absolute source path under ${UNPACKDIR}/git.
+S = "${UNPACKDIR}/git/${@d.getVar('VIRTIOSO_CONTRACTS_LOCAL_SRC').lstrip('/')}"
 
 python () {
     import os
@@ -19,16 +19,9 @@ python () {
 do_configure[noexec] = "1"
 do_compile[noexec] = "1"
 
+# The contract is the include tree as the repository ships it; a list of
+# names here went stale silently (four of seven no longer existed).
 do_install() {
-    install -d ${D}${includedir}/virtioso/backend
-    install -d ${D}${includedir}/virtioso/rpc
-    install -d ${D}${includedir}/virtioso/trace
-
-    install -m 0644 ${S}/include/virtioso/backend/dt.h ${D}${includedir}/virtioso/backend/
-    install -m 0644 ${S}/include/virtioso/backend/pci.h ${D}${includedir}/virtioso/backend/
-    install -m 0644 ${S}/include/virtioso/rpc/rpc.h ${D}${includedir}/virtioso/rpc/
-    install -m 0644 ${S}/include/virtioso/rpc/rpc_queue.h ${D}${includedir}/virtioso/rpc/
-    install -m 0644 ${S}/include/virtioso/trace/bridge.h ${D}${includedir}/virtioso/trace/
-    install -m 0644 ${S}/include/virtioso/trace/stream.h ${D}${includedir}/virtioso/trace/
-    install -m 0644 ${S}/include/virtioso/trace/trace.h ${D}${includedir}/virtioso/trace/
+    install -d ${D}${includedir}
+    cp -R --no-dereference --preserve=mode,timestamps ${S}/include/virtioso ${D}${includedir}/
 }
